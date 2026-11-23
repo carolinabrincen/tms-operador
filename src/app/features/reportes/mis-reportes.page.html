@@ -24,14 +24,16 @@
 
   <ul class="leyenda" aria-label="Qué significa cada estado">
     <li><span class="chip chip-pendiente">Pendiente de enviar</span> guardado en el teléfono</li>
-    <li><span class="chip chip-enviado">Enviado</span> la oficina lo recibió</li>
-    <li><span class="chip chip-confirmado">Confirmado por oficina</span> la oficina lo revisó</li>
+    <li><span class="chip chip-enviado">Enviado</span> la oficina lo recibió (avances e incidencias)</li>
+    <li><span class="chip chip-por-confirmar">Pendiente de confirmar por oficina</span> “Ya cargué…” o “Ya descargué”</li>
+    <li><span class="chip chip-confirmado">Confirmado</span> la oficina confirmó</li>
+    <li><span class="chip chip-rechazado">No aceptado</span> avise a la oficina</li>
   </ul>
 
   @for (r of cola.reportes(); track r.id) {
     <app-reporte-item [reporte]="r" />
   } @empty {
-    <p class="tarjeta">Aún no ha reportado avances. Para reportar, vaya a <a routerLink="/despacho">Mi despacho</a>.</p>
+    <p class="tarjeta">Aún no ha reportado avances. Para reportar, vaya a <a routerLink="/viaje">Mi viaje</a>.</p>
   }
 
   @if (cola.reportes().length) {

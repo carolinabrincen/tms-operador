@@ -42,7 +42,9 @@ export function configurar(e: EntornoPruebas, extra: (Provider | EnvironmentProv
             enLinea: () => e.navegador.onLine,
             ahora: () => e.reloj.ahora,
             latenciaMs: 0,
-            confirmarTrasMs: 20_000,
+            confirmarHitoTrasMs: 20_000,
+            oficinaAvanzaTrasMs: 30_000,
+            cierreTrasMs: 30_000,
           });
         },
       },

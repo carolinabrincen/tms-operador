@@ -69,7 +69,7 @@ export class AccesoPage {
     try {
       await this.sesion.entrar(this.celular(), pin);
       this.intentado.set(false);
-      await this.router.navigateByUrl('/despacho');
+      await this.router.navigateByUrl('/viaje');
     } catch (e) {
       this.errorGeneral.set(MENSAJE_ERROR[comoErrorApi(e).tipo]);
     } finally {

@@ -1,0 +1,106 @@
+<section class="panel" aria-label="Reportar">
+  <p class="panel-estatus">
+    Estatus: <strong>{{ ETIQUETA_ESTATUS[guia().estatus] }}</strong>
+    @if (marcaGuia()) {
+      <span class="chip" [class.chip-pendiente]="guia().estadoReporte === 'pendiente'" [class.chip-por-confirmar]="guia().estadoReporte === 'por-confirmar'">{{
+        marcaGuia()
+      }}</span>
+    }
+  </p>
+
+  @if (cerrado()) {
+    <p class="alerta alerta-info">Este viaje ya está cerrado.</p>
+  } @else {
+    @if (siguiente(); as s) {
+      <button type="button" class="btn btn-primario btn-bloque paso-siguiente" (click)="pedirEstatus(s)">
+        {{ boton(s) }}
+      </button>
+      @if (esHito(s)) {
+        <p class="texto-suave paso-nota">La oficina lo confirmará (ahí captura toneladas y estadía).</p>
+      }
+      @if (otros().length) {
+        <details class="otros-pasos">
+          <summary>Otro paso (puede saltar)</summary>
+          <div class="otros-lista">
+            @for (e of otros(); track e) {
+              <button type="button" class="btn btn-secundario btn-bloque" (click)="pedirEstatus(e)">{{ boton(e) }}</button>
+            }
+          </div>
+        </details>
+      }
+    } @else {
+      <p class="alerta alerta-exito">
+        Ya reportó “{{ ultimoPaso() ? boton(ultimoPaso()!) : ETIQUETA_ESTATUS[guia().estatus] }}”. La oficina cerrará el viaje.
+      </p>
+    }
+
+    <button type="button" class="btn btn-secundario btn-bloque incidencia" (click)="pedirIncidencia()">⚠ Reportar incidencia</button>
+  }
+</section>
+
+@if (borrador(); as b) {
+  <div class="velo" (click)="cancelar()">
+    <section class="hoja" role="dialog" aria-modal="true" aria-labelledby="titulo-hoja" (click)="$event.stopPropagation()">
+      @if (b.tipo === 'estatus') {
+        <h2 id="titulo-hoja">¿Reportar “{{ boton(b.estatus) }}”?</h2>
+        <p>El viaje pasará a <strong>{{ ETIQUETA_ESTATUS[b.estatus] }}</strong>.</p>
+        @if (esHito(b.estatus)) {
+          <p class="alerta alerta-info">Es un hito: quedará “Pendiente de confirmar por oficina”.</p>
+        }
+        @if (b.saltados.length) {
+          <p class="alerta alerta-aviso">
+            Se saltará: {{ b.saltados.map(boton).join(', ') }}. Después ya no podrá reportarlos.
+          </p>
+        }
+      } @else {
+        <h2 id="titulo-hoja">Reportar incidencia</h2>
+        <p>¿Qué pasó? No cambia el estatus del viaje.</p>
+        <div class="opciones" role="radiogroup" aria-label="Tipo de incidencia">
+          @for (t of INCIDENCIAS; track t) {
+            <button
+              type="button"
+              role="radio"
+              class="btn btn-bloque opcion"
+              [class.btn-primario]="b.incidencia === t"
+              [class.btn-secundario]="b.incidencia !== t"
+              [attr.aria-checked]="b.incidencia === t"
+              (click)="elegirIncidencia(t)"
+            >
+              {{ ETIQUETA_INCIDENCIA[t] }}
+            </button>
+          }
+        </div>
+      }
+
+      <p class="hoja-viaje texto-suave">{{ viaje().folio }} · {{ fechaHora(b.ocurrioEn) }} ({{ TEXTO_ZONA }})</p>
+
+      <div class="campo">
+        <label for="nota-{{ viaje().id }}">
+          Nota {{ b.tipo === 'incidencia' && b.incidencia === 'Otro' ? '(obligatoria)' : '(opcional)' }}
+        </label>
+        <textarea id="nota-{{ viaje().id }}" rows="3" [attr.maxlength]="LARGO_NOTA" [value]="nota()" (input)="escribirNota($event)"></textarea>
+      </div>
+
+      @if (intentoEnvio() && errorIncidencia()) {
+        <p class="campo-error" role="alert">{{ errorIncidencia() }}</p>
+      }
+
+      @if (b.explicar) {
+        <p class="alerta alerta-info"><strong>Ubicación.</strong> {{ EXPLICACION_UBICACION }}</p>
+      }
+      <p class="texto-suave">{{ textoUbicacion(b.permiso) }}</p>
+
+      @if (buscandoUbicacion()) {
+        <p class="alerta alerta-info" role="status">Buscando su ubicación…</p>
+        <button type="button" class="btn btn-secundario btn-bloque" (click)="sinUbicacion()">Enviar sin ubicación</button>
+      } @else {
+        <div class="acciones">
+          <button type="button" class="btn btn-primario btn-bloque" [class.btn-ocupado]="guardando()" (click)="confirmar()">
+            {{ guardando() ? 'Guardando…' : 'Enviar reporte' }}
+          </button>
+          <button type="button" class="btn btn-secundario btn-bloque" (click)="cancelar()">Cancelar</button>
+        </div>
+      }
+    </section>
+  </div>
+}

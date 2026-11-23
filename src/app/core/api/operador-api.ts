@@ -1,5 +1,5 @@
 import { InjectionToken } from '@angular/core';
-import { AcuseReporte, AsignacionOperador, EstadoRemotoReporte, ReporteAvance, SesionOperador } from './operador-api.modelos';
+import { AcuseReporte, AsignacionOperador, EstadoRemotoReporte, ReporteOperador, SesionOperador } from './operador-api.modelos';
 
 /**
  * ÚNICA puerta a la API del operador. Hoy solo existe la implementación de EJEMPLO (en memoria). Cuando llegue el
@@ -14,13 +14,16 @@ export interface OperadorApi {
   /** Celular a 10 dígitos y PIN asignado por la oficina. El PIN no se guarda en ningún lado. */
   iniciarSesion(celular: string, pin: string): Promise<SesionOperador>;
 
-  /** Despacho activo y movimientos en vacío del operador con sesión. Solo lo suyo. */
+  /** Salida y viajes del operador con sesión, con su estatus actual e historial. Solo lo suyo. */
   obtenerAsignacion(): Promise<AsignacionOperador>;
 
-  /** Envía un reporte. IDEMPOTENTE por reporte.id: reenviar el mismo id devuelve el mismo acuse, sin duplicar. */
-  enviarReporte(reporte: ReporteAvance): Promise<AcuseReporte>;
+  /**
+   * Envía un reporte de estatus o de incidencia. IDEMPOTENTE por reporte.id: reenviar el mismo id devuelve el acuse
+   * actual, sin duplicar. Un estatus igual o anterior al actual del viaje se recibe "sin-efecto" (no retrocede).
+   */
+  enviarReporte(reporte: ReporteOperador): Promise<AcuseReporte>;
 
-  /** Estado de reportes ya enviados (¿los confirmó la oficina?). Los ids que el servidor no conozca no se devuelven. */
+  /** Estado de reportes ya enviados (¿la oficina confirmó el hito?). Los ids que el servidor no conozca no se devuelven. */
   consultarReportes(ids: string[]): Promise<EstadoRemotoReporte[]>;
 }
 

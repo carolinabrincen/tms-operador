@@ -3,7 +3,7 @@ import { PuntoGps } from '../../core/api/operador-api.modelos';
 import { ahoraIsoUtc } from './zona-negocio.util';
 
 export const EXPLICACION_UBICACION =
-  'Su ubicación se registra solo al reportar un avance y mientras tenga un despacho activo.';
+  'Su ubicación se registra solo al reportar un avance y mientras tenga un viaje activo.';
 
 /** Espera máxima por el GPS antes de guardar el reporte sin punto. */
 export const ESPERA_GPS_MS = 6000;

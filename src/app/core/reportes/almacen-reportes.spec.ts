@@ -1,12 +1,12 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { crearReporteLocal } from '../../shared/utils/cola-reportes.util';
-import { AlmacenReportesIndexedDb, AlmacenReportesMemoria } from './almacen-reportes';
+import { AlmacenReportesIndexedDb, AlmacenReportesMemoria, NOMBRE_BD, TABLA_REPORTES } from './almacen-reportes';
 
 const r = (id: string) =>
   crearReporteLocal(
-    { id, objetivo: { tipo: 'movimiento', movimientoId: 'm' }, avance: 'sali', ocurrioEn: '2026-11-23T16:00:00Z', ubicacion: null, nota: null },
+    { tipo: 'estatus', id, viajeId: 'v1', estatus: 'EnTransitoVacio', ocurrioEn: '2026-11-23T16:00:00Z', ubicacion: null, nota: null },
     'op1',
-    'Mov',
+    'Viaje 1',
     '2026-11-23T16:00:00Z',
   );
 
@@ -24,6 +24,27 @@ describe('AlmacenReportes: la cola en el teléfono', () => {
       ['2', 'pendiente'],
     ]);
     expect(otraApertura.persistente).toBe(true);
+  });
+
+  it('una base del paso 1 (versión 1, solo datos de ejemplo) se vacía al abrirla con la versión 2', async () => {
+    const idb = new IDBFactory();
+    await new Promise<void>((listo) => {
+      const req = idb.open(NOMBRE_BD, 1);
+      req.onupgradeneeded = () => req.result.createObjectStore(TABLA_REPORTES, { keyPath: 'id' }).put({ id: 'viejo', reporte: { objetivo: {} } });
+      req.onsuccess = () => (req.result.close(), listo());
+    });
+    const a = new AlmacenReportesIndexedDb(idb);
+    expect(await a.todos()).toEqual([]);
+    await a.guardar(r('1'));
+    expect((await a.todos()).map((x) => x.id)).toEqual(['1']);
+  });
+
+  it('ignora registros con formato inválido', async () => {
+    const idb = new IDBFactory();
+    const a = new AlmacenReportesIndexedDb(idb);
+    await a.guardar(r('1'));
+    await a.guardar({ id: 'dañado' } as never);
+    expect((await a.todos()).map((x) => x.id)).toEqual(['1']);
   });
 
   it('si IndexedDB no abre, sigue en memoria (no pierde el reporte en curso) y avisa que no es persistente', async () => {

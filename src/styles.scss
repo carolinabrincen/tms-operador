@@ -244,6 +244,15 @@ a {
   background: var(--c-info-fondo);
   color: var(--c-primario-oscuro);
 }
+.chip-por-confirmar {
+  background: var(--c-aviso-fondo);
+  color: #3d2c00;
+  border-color: #7a5b00;
+}
+.chip-cerrado {
+  background: var(--c-superficie);
+  color: var(--c-texto);
+}
 .chip-confirmado {
   background: var(--c-exito);
   color: #fff;

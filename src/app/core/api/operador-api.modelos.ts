@@ -27,9 +27,55 @@ export interface Unidad {
   remolques: string[];
 }
 
-export interface Viaje {
+// ---------------------------------------------------------------- Estatus del viaje (los mismos nombres que oficina)
+
+export const ESTATUS_CARGADO = [
+  'Asignado',
+  'EnPosicionamiento',
+  'EnPatioOrigen',
+  'EnCarga',
+  'Documentado',
+  'EnTransito',
+  'EnPatioDestino',
+  'EnDescarga',
+  'Descargado',
+  'Cerrado',
+] as const;
+export type EstatusCargado = (typeof ESTATUS_CARGADO)[number];
+
+/** EnPatio y EnTaller son alternativas del mismo paso (llegada). */
+export const ESTATUS_VACIO = ['Asignado', 'EnTransitoVacio', 'EnPatio', 'EnTaller', 'Cerrado'] as const;
+export type EstatusVacio = (typeof ESTATUS_VACIO)[number];
+
+export type EstatusViaje = EstatusCargado | EstatusVacio;
+
+/** Quién puso un estatus. */
+export type Autor = 'operador' | 'oficina';
+
+export const MOTIVOS_TRAMO_VACIO = ['Posicionamiento', 'Carga de combustible', 'Taller', 'Otro'] as const;
+export type MotivoTramoVacio = (typeof MOTIVOS_TRAMO_VACIO)[number];
+
+export const TIPOS_INCIDENCIA = ['DetenidoParador', 'FallaMecanica', 'RetenInspeccion', 'DesvioRuta', 'Otro'] as const;
+export type TipoIncidencia = (typeof TIPOS_INCIDENCIA)[number];
+
+/** Lo ya ocurrido en un viaje, según el servidor. */
+export type EventoViaje =
+  | { tipo: 'estatus'; estatus: EstatusViaje; ocurrioEn: IsoUtc; autor: Autor; reporteId: string | null }
+  | { tipo: 'incidencia'; incidencia: TipoIncidencia; nota: string | null; ocurrioEn: IsoUtc; autor: Autor; reporteId: string | null };
+
+interface ViajeBase {
   id: string;
   folio: string;
+  /** 1, 2, 3…: orden dentro de la salida. */
+  orden: number;
+  notas: string | null;
+  /** Historial de estatus e incidencias, del más antiguo al más reciente. */
+  historial: EventoViaje[];
+}
+
+export interface ViajeCargado extends ViajeBase {
+  tipo: 'cargado';
+  estatus: EstatusCargado;
   cliente: string;
   origen: string;
   destino: string;
@@ -38,68 +84,40 @@ export interface Viaje {
   producto: string;
   toneladasProgramadas: number | null;
   referencia: string | null;
-  notas: string | null;
 }
 
 export interface TramoVacio {
+  orden: number;
+  motivo: MotivoTramoVacio;
+  origen: string;
+  destino: string;
+}
+
+export interface ViajeVacio extends ViajeBase {
   tipo: 'vacio';
-  id: string;
-  /** 1, 2, 3…: el orden en que se recorre. */
-  orden: number;
-  origen: string;
-  destino: string;
-  notas: string | null;
+  estatus: EstatusVacio;
+  /** En orden. El motivo del último decide si "Llegué" es EnPatio o EnTaller. */
+  tramos: TramoVacio[];
 }
 
-export interface TramoCargado {
-  tipo: 'cargado';
-  id: string;
-  orden: number;
-  viaje: Viaje;
-}
+export type Viaje = ViajeCargado | ViajeVacio;
 
-export type Tramo = TramoVacio | TramoCargado;
-
-export interface Despacho {
+/** La salida de la unidad: uno o varios viajes, en orden. (En oficina, el despacho es el inicio del viaje.) */
+export interface Salida {
   id: string;
   folio: string;
   unidad: Unidad;
-  /** En el orden en que se recorren. */
-  tramos: Tramo[];
-  notas: string | null;
-}
-
-export const MOTIVOS_MOVIMIENTO_VACIO = ['Posicionamiento', 'Carga de combustible', 'Taller', 'Otro'] as const;
-export type MotivoMovimientoVacio = (typeof MOTIVOS_MOVIMIENTO_VACIO)[number];
-
-/** Movimiento de la unidad en vacío que NO pertenece a un viaje. */
-export interface MovimientoVacio {
-  id: string;
-  folio: string;
-  motivo: MotivoMovimientoVacio;
-  unidad: Unidad;
-  origen: string;
-  destino: string;
-  programadoPara: IsoUtc | null;
+  viajes: Viaje[];
   notas: string | null;
 }
 
 /** Lo que el operador tiene asignado ahora. Solo lo suyo. */
 export interface AsignacionOperador {
-  /** null = no tiene despacho activo. */
-  despacho: Despacho | null;
-  movimientosVacio: MovimientoVacio[];
+  /** null = no tiene salida asignada. */
+  salida: Salida | null;
 }
 
-// ---------------------------------------------------------------- Reportes de avance
-
-/** Avances que puede reportar. Un reporte NO cambia el estado del viaje: la oficina lo confirma. */
-export type TipoAvance = 'sali' | 'llegue-cargar' | 'cargado' | 'llegue-descargar' | 'entregado' | 'llegue' | 'termine';
-
-/** Sobre qué se reporta. */
-export type ObjetivoReporte =
-  | { tipo: 'tramo'; despachoId: string; tramoId: string; viajeId: string | null }
-  | { tipo: 'movimiento'; movimientoId: string };
+// ---------------------------------------------------------------- Reportes del operador
 
 export interface PuntoGps {
   lat: number;
@@ -109,11 +127,10 @@ export interface PuntoGps {
   tomadoEn: IsoUtc;
 }
 
-/** Lo que se envía. El id lo genera el teléfono: reenviar el mismo id NO debe duplicar el reporte. */
-export interface ReporteAvance {
+interface ReporteBase {
+  /** Lo genera el teléfono: reenviar el mismo id NO debe duplicar el reporte. */
   id: string;
-  objetivo: ObjetivoReporte;
-  avance: TipoAvance;
+  viajeId: string;
   /** Cuándo ocurrió (hora del teléfono al reportar, en UTC). */
   ocurrioEn: IsoUtc;
   /** null = sin permiso o sin señal de GPS. El reporte se envía igual. */
@@ -121,16 +138,42 @@ export interface ReporteAvance {
   nota: string | null;
 }
 
-/** Respuesta del servidor al recibir un reporte (también al recibirlo repetido). */
+/** El operador reporta que el viaje llegó a ese estatus. Solo hacia adelante. */
+export interface ReporteEstatus extends ReporteBase {
+  tipo: 'estatus';
+  estatus: EstatusViaje;
+}
+
+/** Incidencia en el camino. No cambia el estatus del viaje. */
+export interface ReporteIncidencia extends ReporteBase {
+  tipo: 'incidencia';
+  incidencia: TipoIncidencia;
+}
+
+export type ReporteOperador = ReporteEstatus | ReporteIncidencia;
+
+/**
+ * Qué hizo el servidor con un reporte:
+ *  - aplicado: estatus intermedio aplicado al momento.
+ *  - por-confirmar: hito (Documentado, Descargado) que espera a la oficina.
+ *  - confirmado: la oficina confirmó el hito.
+ *  - registrado: incidencia guardada.
+ *  - sin-efecto: recibido, pero el viaje ya iba igual o más adelante (p. ej. la oficina avanzó); el estatus no cambió.
+ */
+export type ResultadoReporte = 'aplicado' | 'por-confirmar' | 'confirmado' | 'registrado' | 'sin-efecto';
+
+/** Respuesta al recibir un reporte (también al recibirlo repetido). */
 export interface AcuseReporte {
   id: string;
   recibidoEn: IsoUtc;
-  confirmado: boolean;
+  resultado: ResultadoReporte;
+  /** Explicación para el operador (sobre todo en sin-efecto). */
+  mensaje: string | null;
 }
 
-/** Estado de un reporte del lado del servidor. */
+/** Estado actual de un reporte en el servidor. */
 export interface EstadoRemotoReporte {
   id: string;
-  confirmado: boolean;
+  resultado: ResultadoReporte;
   confirmadoEn: IsoUtc | null;
 }

@@ -6,6 +6,6 @@ import { AlmacenSesion } from './almacen-sesion';
 export const conSesionGuard: CanActivateFn = () =>
   inject(AlmacenSesion).sesion() ? true : inject(Router).createUrlTree(['/acceso']);
 
-/** Pantalla de acceso: si ya hay sesión, va directo a su despacho. */
+/** Pantalla de acceso: si ya hay sesión, va directo a su viaje. */
 export const sinSesionGuard: CanActivateFn = () =>
-  inject(AlmacenSesion).sesion() ? inject(Router).createUrlTree(['/despacho']) : true;
+  inject(AlmacenSesion).sesion() ? inject(Router).createUrlTree(['/viaje']) : true;

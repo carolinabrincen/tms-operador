@@ -1,8 +1,11 @@
 import { ErrorApiOperador } from '../operador-api';
-import { ReporteAvance } from '../operador-api.modelos';
+import { EstatusViaje, ReporteEstatus, ReporteIncidencia, Viaje } from '../operador-api.modelos';
 import { OperadorApiEjemplo, OpcionesEjemplo } from './operador-api-ejemplo';
 
 const CAMPOS_PROHIBIDOS = /tarifa|ingreso|costo|utilidad|pago|precio|importe|flete|monto|margen|sueldo|comision|comisión/i;
+const CARGADO = 'ej-via-771';
+const VACIO_PATIO = 'ej-via-770';
+const VACIO_TALLER = 'ej-via-773';
 
 function crear(extra: Partial<OpcionesEjemplo> = {}) {
   let token: string | null = null;
@@ -13,28 +16,27 @@ function crear(extra: Partial<OpcionesEjemplo> = {}) {
     enLinea: () => enLinea,
     ahora: () => ahora,
     latenciaMs: 0,
-    confirmarTrasMs: 20_000,
+    confirmarHitoTrasMs: 20_000,
+    oficinaAvanzaTrasMs: 30_000,
+    cierreTrasMs: 30_000,
     ...extra,
   });
-  return {
+  const c = {
     api,
     entrar: async (celular = '8112345678') => (token = (await api.iniciarSesion(celular, '1234')).token),
-    setToken: (t: string | null) => (token = t),
     setEnLinea: (v: boolean) => (enLinea = v),
     avanzar: (ms: number) => (ahora = new Date(ahora.getTime() + ms)),
+    viaje: async (id: string): Promise<Viaje> => (await api.obtenerAsignacion()).salida!.viajes.find((v) => v.id === id)!,
   };
+  return c;
 }
 
-function reporte(extra: Partial<ReporteAvance> = {}): ReporteAvance {
-  return {
-    id: 'r-1',
-    objetivo: { tipo: 'tramo', despachoId: 'ej-des-418', tramoId: 'ej-tra-2', viajeId: 'ej-via-771' },
-    avance: 'llegue-cargar',
-    ocurrioEn: '2026-11-23T16:00:00Z',
-    ubicacion: null,
-    nota: null,
-    ...extra,
-  };
+let n = 0;
+function estatus(viajeId: string, e: EstatusViaje, id = `r${++n}`): ReporteEstatus {
+  return { tipo: 'estatus', id, viajeId, estatus: e, ocurrioEn: '2026-11-23T16:00:00Z', ubicacion: null, nota: null };
+}
+function incidencia(viajeId: string, extra: Partial<ReporteIncidencia> = {}): ReporteIncidencia {
+  return { tipo: 'incidencia', id: `i${++n}`, viajeId, incidencia: 'FallaMecanica', ocurrioEn: '2026-11-23T16:00:00Z', ubicacion: null, nota: null, ...extra };
 }
 
 async function errorDe(p: Promise<unknown>): Promise<ErrorApiOperador> {
@@ -59,8 +61,7 @@ describe('OperadorApiEjemplo: implementación en memoria', () => {
   });
 
   it('acceso: cualquier celular de 10 dígitos y PIN numérico entra; el resultado no trae el PIN', async () => {
-    const { api } = crear();
-    const s = await api.iniciarSesion('+52 81 1234 5678', '4321');
+    const s = await crear().api.iniciarSesion('+52 81 1234 5678', '4321');
     expect(s).toEqual({ operadorId: 'ej-op-8112345678', nombre: 'Operador de ejemplo', celularTerminacion: '5678', token: 'ejemplo.ej-op-8112345678.0' });
     expect(JSON.stringify(s)).not.toContain('4321');
   });
@@ -71,76 +72,174 @@ describe('OperadorApiEjemplo: implementación en memoria', () => {
     expect((await errorDe(api.iniciarSesion('8112345678', 'abcd'))).tipo).toBe('sesion');
   });
 
-  it('asignación: despacho con 4 tramos y un movimiento en vacío; sin sesión = error de sesión', async () => {
+  it('asignación: salida con 4 viajes en orden (vacío, cargado, cargado, vacío), todos Asignado por la oficina', async () => {
     const c = crear();
     expect((await errorDe(c.api.obtenerAsignacion())).tipo).toBe('sesion');
     await c.entrar();
-    const a = await c.api.obtenerAsignacion();
-    expect(a.despacho?.tramos.map((t) => t.tipo)).toEqual(['vacio', 'cargado', 'cargado', 'vacio']);
-    expect(a.movimientosVacio.map((m) => m.motivo)).toEqual(['Carga de combustible']);
+    const { salida } = await c.api.obtenerAsignacion();
+    expect(salida!.viajes.map((v) => `${v.orden}:${v.tipo}:${v.estatus}`)).toEqual(['1:vacio:Asignado', '2:cargado:Asignado', '3:cargado:Asignado', '4:vacio:Asignado']);
+    expect(salida!.viajes[0].historial).toEqual([{ tipo: 'estatus', estatus: 'Asignado', ocurrioEn: '2026-11-23T15:00:00Z', autor: 'oficina', reporteId: null }]);
   });
 
-  it('celular terminado en 0000: sin despacho activo', async () => {
+  it('celular terminado en 0000: sin salida', async () => {
     const c = crear();
     await c.entrar('8112340000');
-    expect(await c.api.obtenerAsignacion()).toEqual({ despacho: null, movimientosVacio: [] });
+    expect(await c.api.obtenerAsignacion()).toEqual({ salida: null });
   });
 
   it('los datos de ejemplo NO tienen tarifas, ingresos, costos, utilidad ni pagos', async () => {
     const c = crear();
     await c.entrar();
-    const prohibidas = llaves(await c.api.obtenerAsignacion()).filter((k) => CAMPOS_PROHIBIDOS.test(k));
-    expect(prohibidas).toEqual([]);
+    expect(llaves(await c.api.obtenerAsignacion()).filter((k) => CAMPOS_PROHIBIDOS.test(k))).toEqual([]);
   });
 
-  it('reenviar el mismo id NO duplica y devuelve el mismo acuse', async () => {
+  it('intermedio: se aplica al momento y queda en el historial como del operador', async () => {
     const c = crear();
     await c.entrar();
-    const a1 = await c.api.enviarReporte(reporte());
-    const a2 = await c.api.enviarReporte(reporte());
+    const r = estatus(CARGADO, 'EnPatioOrigen'); // salta "Voy a cargar": se vale
+    expect(await c.api.enviarReporte(r)).toMatchObject({ resultado: 'aplicado', mensaje: null });
+    const v = await c.viaje(CARGADO);
+    expect(v.estatus).toBe('EnPatioOrigen');
+    expect(v.historial.at(-1)).toEqual({ tipo: 'estatus', estatus: 'EnPatioOrigen', ocurrioEn: r.ocurrioEn, autor: 'operador', reporteId: r.id });
+  });
+
+  it('hito: queda por confirmar y la oficina lo confirma después de un rato', async () => {
+    const c = crear();
+    await c.entrar();
+    const r = estatus(CARGADO, 'Documentado');
+    expect((await c.api.enviarReporte(r)).resultado).toBe('por-confirmar');
+    expect((await c.viaje(CARGADO)).estatus).toBe('Asignado');
+    expect(await c.api.consultarReportes([r.id])).toEqual([{ id: r.id, resultado: 'por-confirmar', confirmadoEn: null }]);
+    c.avanzar(20_000);
+    expect(await c.api.consultarReportes([r.id])).toEqual([{ id: r.id, resultado: 'confirmado', confirmadoEn: '2026-11-23T16:00:20Z' }]);
+    expect((await c.viaje(CARGADO)).estatus).toBe('Documentado');
+  });
+
+  it('el hito confirmado queda en el historial aunque el operador ya haya avanzado', async () => {
+    const c = crear();
+    await c.entrar();
+    await c.api.enviarReporte(estatus(CARGADO, 'Documentado'));
+    await c.api.enviarReporte(estatus(CARGADO, 'EnTransito'));
+    c.avanzar(20_000);
+    const v = await c.viaje(CARGADO);
+    expect(v.estatus).toBe('EnTransito');
+    expect(v.historial.filter((e) => e.tipo === 'estatus').map((e) => (e as { estatus: string }).estatus)).toContain('Documentado');
+  });
+
+  it('la oficina avanza sola: tras "EnCarga" pone Documentado ella misma', async () => {
+    const c = crear();
+    await c.entrar();
+    await c.api.enviarReporte(estatus(CARGADO, 'EnCarga'));
+    c.avanzar(29_000);
+    expect((await c.viaje(CARGADO)).estatus).toBe('EnCarga');
+    c.avanzar(1_000);
+    const v = await c.viaje(CARGADO);
+    expect(v.estatus).toBe('Documentado');
+    expect(v.historial.at(-1)).toMatchObject({ estatus: 'Documentado', autor: 'oficina', reporteId: null, ocurrioEn: '2026-11-23T16:00:30Z' });
+  });
+
+  it('si el operador reporta un paso que la oficina ya rebasó: se recibe "sin efecto" y no retrocede', async () => {
+    const c = crear();
+    await c.entrar();
+    await c.api.enviarReporte(estatus(CARGADO, 'EnCarga'));
+    c.avanzar(30_000); // oficina → Documentado
+    const atrasado = await c.api.enviarReporte(estatus(CARGADO, 'EnPatioOrigen'));
+    expect(atrasado.resultado).toBe('sin-efecto');
+    expect(atrasado.mensaje).toBe('El viaje ya estaba en «Documentado». Su reporte quedó registrado sin cambiar el estatus.');
+    expect((await c.viaje(CARGADO)).estatus).toBe('Documentado');
+  });
+
+  it('si el operador ya reportó Documentado, la oficina no lo pone por su cuenta', async () => {
+    const c = crear();
+    await c.entrar();
+    await c.api.enviarReporte(estatus(CARGADO, 'EnCarga'));
+    await c.api.enviarReporte(estatus(CARGADO, 'Documentado'));
+    c.avanzar(30_000);
+    const docs = (await c.viaje(CARGADO)).historial.filter((e) => e.tipo === 'estatus' && e.estatus === 'Documentado');
+    expect(docs.map((e) => e.autor)).toEqual(['operador']);
+  });
+
+  it('Descargado confirmado → la oficina cierra el viaje después', async () => {
+    const c = crear();
+    await c.entrar();
+    await c.api.enviarReporte(estatus(CARGADO, 'Descargado'));
+    c.avanzar(20_000);
+    expect((await c.viaje(CARGADO)).estatus).toBe('Descargado');
+    c.avanzar(30_000);
+    expect((await c.viaje(CARGADO)).estatus).toBe('Cerrado');
+  });
+
+  it('vacío: Salí → EnTransitoVacio; Llegué → EnPatio o EnTaller según el último tramo; después la oficina cierra', async () => {
+    const c = crear();
+    await c.entrar();
+    expect((await c.api.enviarReporte(estatus(VACIO_PATIO, 'EnTransitoVacio'))).resultado).toBe('aplicado');
+    expect((await errorDe(c.api.enviarReporte(estatus(VACIO_PATIO, 'EnTaller')))).tipo).toBe('rechazado');
+    expect((await c.api.enviarReporte(estatus(VACIO_PATIO, 'EnPatio'))).resultado).toBe('aplicado');
+    expect((await errorDe(c.api.enviarReporte(estatus(VACIO_TALLER, 'EnPatio')))).tipo).toBe('rechazado');
+    expect((await c.api.enviarReporte(estatus(VACIO_TALLER, 'EnTaller'))).resultado).toBe('aplicado');
+    c.avanzar(30_000);
+    expect((await c.viaje(VACIO_PATIO)).estatus).toBe('Cerrado');
+    expect((await c.viaje(VACIO_TALLER)).estatus).toBe('Cerrado');
+  });
+
+  it('rechaza Asignado, Cerrado, estatus de otro tipo de viaje y viajes ajenos', async () => {
+    const c = crear();
+    await c.entrar();
+    for (const e of ['Asignado', 'Cerrado', 'EnTransitoVacio'] as const) {
+      expect((await errorDe(c.api.enviarReporte(estatus(CARGADO, e)))).tipo).toBe('rechazado');
+    }
+    expect((await errorDe(c.api.enviarReporte(estatus('otro-viaje', 'EnCarga')))).message).toBe('Ese viaje no está asignado a usted.');
+  });
+
+  it('incidencia: se registra en el historial y NO cambia el estatus; en "Otro" la nota es obligatoria', async () => {
+    const c = crear();
+    await c.entrar();
+    const i = incidencia(CARGADO, { incidencia: 'RetenInspeccion', nota: 'Revisión' });
+    expect((await c.api.enviarReporte(i)).resultado).toBe('registrado');
+    const v = await c.viaje(CARGADO);
+    expect(v.estatus).toBe('Asignado');
+    expect(v.historial.at(-1)).toEqual({ tipo: 'incidencia', incidencia: 'RetenInspeccion', nota: 'Revisión', ocurrioEn: i.ocurrioEn, autor: 'operador', reporteId: i.id });
+    expect((await errorDe(c.api.enviarReporte(incidencia(CARGADO, { incidencia: 'Otro', nota: ' ' })))).tipo).toBe('rechazado');
+    expect((await c.api.enviarReporte(incidencia(CARGADO, { incidencia: 'Otro', nota: 'Lluvia' }))).resultado).toBe('registrado');
+  });
+
+  it('incidencia en viaje cerrado: rechazada', async () => {
+    const c = crear();
+    await c.entrar();
+    await c.api.enviarReporte(estatus(VACIO_PATIO, 'EnPatio'));
+    c.avanzar(30_000);
+    expect((await errorDe(c.api.enviarReporte(incidencia(VACIO_PATIO)))).message).toBe('El viaje ya está cerrado.');
+  });
+
+  it('reenviar el mismo id NO duplica y devuelve el resultado actual', async () => {
+    const c = crear();
+    await c.entrar();
+    const r = estatus(CARGADO, 'Documentado');
+    const a1 = await c.api.enviarReporte(r);
+    expect(await c.api.enviarReporte(r)).toEqual(a1);
     expect(c.api.totalRecibidos).toBe(1);
-    expect(a2).toEqual(a1);
-    await c.api.enviarReporte(reporte({ id: 'r-2' }));
-    expect(c.api.totalRecibidos).toBe(2);
+    c.avanzar(20_000);
+    expect((await c.api.enviarReporte(r)).resultado).toBe('confirmado');
+    expect(c.api.totalRecibidos).toBe(1);
+    expect((await c.viaje(CARGADO)).historial.filter((e) => e.reporteId === r.id)).toHaveLength(1);
   });
 
   it('sin conexión: falla como sin-conexion y no registra nada', async () => {
     const c = crear();
     await c.entrar();
     c.setEnLinea(false);
-    expect((await errorDe(c.api.enviarReporte(reporte()))).tipo).toBe('sin-conexion');
+    expect((await errorDe(c.api.enviarReporte(estatus(CARGADO, 'EnCarga')))).tipo).toBe('sin-conexion');
     expect(c.api.totalRecibidos).toBe(0);
   });
 
-  it('rechaza reportes de tramos o movimientos ajenos, o con avance que no aplica', async () => {
-    const c = crear();
-    await c.entrar();
-    const ajeno = reporte({ objetivo: { tipo: 'tramo', despachoId: 'ej-des-418', tramoId: 'otro', viajeId: null } });
-    expect((await errorDe(c.api.enviarReporte(ajeno))).tipo).toBe('rechazado');
-    const noAplica = reporte({ objetivo: { tipo: 'tramo', despachoId: 'ej-des-418', tramoId: 'ej-tra-1', viajeId: null }, avance: 'cargado' });
-    expect((await errorDe(c.api.enviarReporte(noAplica))).tipo).toBe('rechazado');
-    const mov = reporte({ objetivo: { tipo: 'movimiento', movimientoId: 'ej-mov-93' }, avance: 'llegue' });
-    await expect(c.api.enviarReporte(mov)).resolves.toMatchObject({ id: 'r-1' });
-    expect((await errorDe(c.api.enviarReporte({ ...mov, id: 'r-9', avance: 'entregado' }))).tipo).toBe('rechazado');
-  });
-
-  it('un reporte es de quien lo envió: otro operador no puede reenviarlo ni consultarlo', async () => {
+  it('cada operador tiene su propia salida y sus reportes', async () => {
     const c = crear();
     await c.entrar('8112345678');
-    await c.api.enviarReporte(reporte());
+    const r = estatus(CARGADO, 'EnCarga');
+    await c.api.enviarReporte(r);
     await c.entrar('8119999999');
-    expect((await errorDe(c.api.enviarReporte(reporte()))).tipo).toBe('rechazado');
-    expect(await c.api.consultarReportes(['r-1'])).toEqual([]);
-  });
-
-  it('la "oficina" confirma tras confirmarTrasMs; ids desconocidos no se devuelven', async () => {
-    const c = crear();
-    await c.entrar();
-    await c.api.enviarReporte(reporte());
-    expect(await c.api.consultarReportes(['r-1', 'x'])).toEqual([{ id: 'r-1', confirmado: false, confirmadoEn: null }]);
-    c.avanzar(20_000);
-    expect(await c.api.consultarReportes(['r-1'])).toEqual([{ id: 'r-1', confirmado: true, confirmadoEn: '2026-11-23T16:00:20Z' }]);
-    // Reenviar después de confirmado devuelve el acuse ya confirmado.
-    expect((await c.api.enviarReporte(reporte())).confirmado).toBe(true);
+    expect((await c.viaje(CARGADO)).estatus).toBe('Asignado');
+    expect((await errorDe(c.api.enviarReporte(r))).tipo).toBe('rechazado');
+    expect(await c.api.consultarReportes([r.id])).toEqual([]);
   });
 });

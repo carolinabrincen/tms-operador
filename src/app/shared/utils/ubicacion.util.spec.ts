@@ -2,7 +2,7 @@ import { EXPLICACION_UBICACION, debeExplicar, estadoPermisoDe, puntoDePosicion, 
 
 describe('ubicacion.util: permiso y punto GPS del reporte', () => {
   it('texto de explicación acordado', () => {
-    expect(EXPLICACION_UBICACION).toBe('Su ubicación se registra solo al reportar un avance y mientras tenga un despacho activo.');
+    expect(EXPLICACION_UBICACION).toBe('Su ubicación se registra solo al reportar un avance y mientras tenga un viaje activo.');
   });
 
   it('estado del permiso del navegador → estado de la app', () => {

@@ -5,8 +5,8 @@
  * Las citas se calculan a partir del día de hoy EN EL NEGOCIO (America/Mexico_City), para que el ejemplo siempre se
  * vea vigente.
  */
-import { diaNegocio } from '../../../shared/utils/zona-negocio.util';
-import { AsignacionOperador, Despacho, IsoUtc, MovimientoVacio, Unidad } from '../operador-api.modelos';
+import { ahoraIsoUtc, diaNegocio } from '../../../shared/utils/zona-negocio.util';
+import { IsoUtc, Salida, Unidad } from '../operador-api.modelos';
 
 /** Desfase del centro de México (sin horario de verano desde 2022). */
 const DESFASE_NEGOCIO = '-06:00';
@@ -15,8 +15,7 @@ const DESFASE_NEGOCIO = '-06:00';
 function citaNegocio(ahora: Date, dias: number, hhmm: string): IsoUtc {
   const [y, m, d] = diaNegocio(ahora.toISOString()).split('-').map(Number);
   const dia = new Date(Date.UTC(y, m - 1, d + dias, 12));
-  const texto = `${dia.toISOString().slice(0, 10)}T${hhmm}:00${DESFASE_NEGOCIO}`;
-  return new Date(texto).toISOString().replace(/\.\d{3}Z$/, 'Z');
+  return ahoraIsoUtc(new Date(`${dia.toISOString().slice(0, 10)}T${hhmm}:00${DESFASE_NEGOCIO}`));
 }
 
 const UNIDAD: Unidad = {
@@ -26,90 +25,86 @@ const UNIDAD: Unidad = {
   remolques: ['Caja seca 53 pies · R-221'],
 };
 
-export function despachoEjemplo(ahora: Date): Despacho {
+/**
+ * Salida de ejemplo: 4 viajes en orden.
+ *  1. Vacío a cargar combustible (al llegar: EnPatio).
+ *  2. Cargado Apodaca → Saltillo.
+ *  3. Cargado Ramos Arizpe → San Luis Potosí.
+ *  4. Vacío de regreso; su último tramo va a Taller (al llegar: EnTaller).
+ * Todos empiezan en "Asignado", puesto por la oficina una hora antes.
+ */
+export function salidaEjemplo(ahora: Date): Salida {
+  const asignadoEn = ahoraIsoUtc(new Date(ahora.getTime() - 60 * 60 * 1000));
+  const asignado = () => [{ tipo: 'estatus' as const, estatus: 'Asignado' as const, ocurrioEn: asignadoEn, autor: 'oficina' as const, reporteId: null }];
   return {
-    id: 'ej-des-418',
-    folio: 'DES-2026-00418',
+    id: 'ej-sal-418',
+    folio: 'SAL-2026-00418',
     unidad: UNIDAD,
     notas: 'Revise presión de llantas antes de salir. Cualquier retraso, avise a tráfico.',
-    tramos: [
+    viajes: [
       {
         tipo: 'vacio',
-        id: 'ej-tra-1',
+        id: 'ej-via-770',
+        folio: 'VIA-2026-00770',
         orden: 1,
-        origen: 'Patio Guadalupe, N.L.',
-        destino: 'Apodaca, N.L.',
-        notas: 'Ir directo a la planta del cliente.',
+        estatus: 'Asignado',
+        notas: 'Cargar tanque lleno antes de ir a la planta.',
+        historial: asignado(),
+        tramos: [{ orden: 1, motivo: 'Carga de combustible', origen: 'Patio Guadalupe, N.L.', destino: 'Estación de diésel, Carr. Miguel Alemán km 12' }],
       },
       {
         tipo: 'cargado',
-        id: 'ej-tra-2',
+        id: 'ej-via-771',
+        folio: 'VIA-2026-00771',
         orden: 2,
-        viaje: {
-          id: 'ej-via-771',
-          folio: 'VIA-2026-00771',
-          cliente: 'Aceros del Norte (ejemplo)',
-          origen: 'Apodaca, N.L.',
-          destino: 'Saltillo, Coah.',
-          citaCarga: citaNegocio(ahora, 0, '08:00'),
-          citaDescarga: citaNegocio(ahora, 0, '13:00'),
-          producto: 'Lámina rolada en caliente',
-          toneladasProgramadas: 28.5,
-          referencia: 'OC-55821',
-          notas: 'Presentarse con equipo de protección completo. Acceso por la puerta 3.',
-        },
+        estatus: 'Asignado',
+        cliente: 'Aceros del Norte (ejemplo)',
+        origen: 'Apodaca, N.L.',
+        destino: 'Saltillo, Coah.',
+        citaCarga: citaNegocio(ahora, 0, '08:00'),
+        citaDescarga: citaNegocio(ahora, 0, '13:00'),
+        producto: 'Lámina rolada en caliente',
+        toneladasProgramadas: 28.5,
+        referencia: 'OC-55821',
+        notas: 'Presentarse con equipo de protección completo. Acceso por la puerta 3.',
+        historial: asignado(),
       },
       {
         tipo: 'cargado',
-        id: 'ej-tra-3',
+        id: 'ej-via-772',
+        folio: 'VIA-2026-00772',
         orden: 3,
-        viaje: {
-          id: 'ej-via-772',
-          folio: 'VIA-2026-00772',
-          cliente: 'Empaques del Bajío (ejemplo)',
-          origen: 'Ramos Arizpe, Coah.',
-          destino: 'San Luis Potosí, S.L.P.',
-          citaCarga: citaNegocio(ahora, 0, '16:00'),
-          citaDescarga: citaNegocio(ahora, 1, '08:00'),
-          producto: 'Cartón corrugado en tarimas',
-          toneladasProgramadas: 18,
-          referencia: 'PED-90317',
-          notas: null,
-        },
+        estatus: 'Asignado',
+        cliente: 'Empaques del Bajío (ejemplo)',
+        origen: 'Ramos Arizpe, Coah.',
+        destino: 'San Luis Potosí, S.L.P.',
+        citaCarga: citaNegocio(ahora, 0, '16:00'),
+        citaDescarga: citaNegocio(ahora, 1, '08:00'),
+        producto: 'Cartón corrugado en tarimas',
+        toneladasProgramadas: 18,
+        referencia: 'PED-90317',
+        notas: null,
+        historial: asignado(),
       },
       {
         tipo: 'vacio',
-        id: 'ej-tra-4',
+        id: 'ej-via-773',
+        folio: 'VIA-2026-00773',
         orden: 4,
-        origen: 'San Luis Potosí, S.L.P.',
-        destino: 'Patio Guadalupe, N.L.',
-        notas: 'Regreso vacío a base.',
+        estatus: 'Asignado',
+        notas: 'Servicio de frenos programado al regresar.',
+        historial: asignado(),
+        tramos: [
+          { orden: 1, motivo: 'Posicionamiento', origen: 'San Luis Potosí, S.L.P.', destino: 'Patio Guadalupe, N.L.' },
+          { orden: 2, motivo: 'Taller', origen: 'Patio Guadalupe, N.L.', destino: 'Taller Diésel del Norte, Guadalupe, N.L.' },
+        ],
       },
     ],
   };
 }
 
-export function movimientosEjemplo(ahora: Date): MovimientoVacio[] {
-  return [
-    {
-      id: 'ej-mov-93',
-      folio: 'MV-2026-00093',
-      motivo: 'Carga de combustible',
-      unidad: UNIDAD,
-      origen: 'Patio Guadalupe, N.L.',
-      destino: 'Estación de diésel, Carr. Miguel Alemán km 12',
-      programadoPara: citaNegocio(ahora, 0, '06:30'),
-      notas: 'Cargar tanque lleno antes del primer tramo.',
-    },
-  ];
-}
-
 /**
  * En el ejemplo, un celular que termine en 0000 no tiene nada asignado: sirve para ver la pantalla
- * "No tiene un despacho activo".
+ * "No tiene un viaje activo".
  */
-export const CELULAR_EJEMPLO_SIN_DESPACHO = /0000$/;
-
-export function asignacionEjemplo(ahora: Date, sinDespacho: boolean): AsignacionOperador {
-  return sinDespacho ? { despacho: null, movimientosVacio: [] } : { despacho: despachoEjemplo(ahora), movimientosVacio: movimientosEjemplo(ahora) };
-}
+export const CELULAR_EJEMPLO_SIN_VIAJE = /0000$/;

@@ -1,4 +1,5 @@
 import { InjectionToken } from '@angular/core';
+import { esReporteLocalValido } from '../../shared/utils/cola-reportes.util';
 import { ReporteLocal } from './reporte-local';
 
 /** Dónde vive la cola de reportes en el teléfono. */
@@ -11,7 +12,8 @@ export interface AlmacenReportes {
 }
 
 export const NOMBRE_BD = 'ct-operador';
-export const VERSION_BD = 1;
+/** 2 = paso 2 (reportes por viaje: estatus e incidencias). Los registros del paso 1 eran solo de ejemplo y se descartan. */
+export const VERSION_BD = 2;
 export const TABLA_REPORTES = 'reportes';
 
 export class AlmacenReportesMemoria implements AlmacenReportes {
@@ -54,7 +56,8 @@ export class AlmacenReportesIndexedDb implements AlmacenReportes {
     const bd = await this.abrir();
     if (!bd) return this.respaldo!.todos();
     const tx = bd.transaction(TABLA_REPORTES, 'readonly');
-    return comoPromesa(tx.objectStore(TABLA_REPORTES).getAll() as IDBRequest<ReporteLocal[]>);
+    const todos = await comoPromesa(tx.objectStore(TABLA_REPORTES).getAll() as IDBRequest<unknown[]>);
+    return todos.filter(esReporteLocalValido);
   }
 
   async guardar(reporte: ReporteLocal): Promise<void> {
@@ -80,8 +83,10 @@ export class AlmacenReportesIndexedDb implements AlmacenReportes {
         resolver(null);
         return;
       }
-      req.onupgradeneeded = () => {
+      req.onupgradeneeded = (ev) => {
         const bd = req.result;
+        // Versión 1 (paso 1): formato anterior y solo datos de ejemplo; se empieza de cero.
+        if (ev.oldVersion < 2 && bd.objectStoreNames.contains(TABLA_REPORTES)) bd.deleteObjectStore(TABLA_REPORTES);
         if (!bd.objectStoreNames.contains(TABLA_REPORTES)) bd.createObjectStore(TABLA_REPORTES, { keyPath: 'id' });
       };
       req.onsuccess = () => resolver(req.result);

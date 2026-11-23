@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { normalizarCelular } from '../../shared/utils/acceso.util';
 import { OPERADOR_API } from '../api/operador-api';
-import { AsignacionService } from '../despacho/asignacion.service';
+import { AsignacionService } from '../viaje/asignacion.service';
 import { ColaReportesService } from '../reportes/cola-reportes.service';
 import { AlmacenSesion } from './almacen-sesion';
 

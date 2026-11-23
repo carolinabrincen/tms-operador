@@ -1,0 +1,92 @@
+<main class="pagina">
+  <h1>Mi viaje</h1>
+
+  @if (error()) {
+    <p class="alerta" [class.alerta-aviso]="asignacion()" [class.alerta-error]="!asignacion()" role="status">{{ error() }}</p>
+  }
+
+  @if (!asignacion()) {
+    @if (estado() !== 'error') {
+      <p class="texto-suave" role="status">Cargando su viaje…</p>
+    }
+  } @else {
+    @if (activo(); as v) {
+      <section class="tarjeta tarjeta-destacada" aria-labelledby="titulo-ahora">
+        <p class="ahora-etiqueta">{{ v === toca() ? 'Le toca' : 'Esperando a la oficina' }}</p>
+        <h2 id="titulo-ahora">Viaje {{ v.orden }} · {{ v.tipo === 'cargado' ? 'Cargado' : 'Vacío' }}</h2>
+        <p class="ruta">{{ ruta(v).origen }} → {{ ruta(v).destino }}</p>
+        <app-panel-avance [viaje]="v" />
+      </section>
+
+      <section class="tarjeta" aria-label="Datos del viaje">
+        <app-datos-viaje [viaje]="v" />
+      </section>
+
+      <app-linea-tiempo [entradas]="linea()" />
+    } @else {
+      <section class="tarjeta tarjeta-destacada" role="status">
+        <h2>No tiene un viaje activo</h2>
+        <p>Cuando la oficina le asigne uno, aparecerá aquí. Si cree que es un error, llame a la oficina.</p>
+      </section>
+    }
+
+    @if (salida(); as s) {
+      @if (viajes().length > 1) {
+        <h2>Viajes de esta salida</h2>
+        @for (v of viajes(); track v.id) {
+          <a class="tarjeta viaje-enlace" [class.tarjeta-apagada]="v.estatus === 'Cerrado'" [routerLink]="['/viaje', v.id]">
+            <div class="tarjeta-cabeza">
+              <h3>Viaje {{ v.orden }} · {{ v.tipo === 'cargado' ? 'Cargado' : 'Vacío' }}</h3>
+              @if (v === toca()) {
+                <span class="chip chip-toca">Le toca</span>
+              } @else {
+                <span class="chip" [class.chip-cerrado]="v.estatus === 'Cerrado'">{{ estatusDe(v) }}</span>
+              }
+            </div>
+            <p class="ruta">{{ ruta(v).origen }} → {{ ruta(v).destino }}</p>
+            <span class="texto-suave">Ver detalle y línea de tiempo ›</span>
+          </a>
+        }
+      }
+
+      <section class="tarjeta" aria-labelledby="titulo-unidad">
+        <h2 id="titulo-unidad">Unidad</h2>
+        <dl class="datos">
+          <div>
+            <dt>Unidad</dt>
+            <dd>{{ s.unidad.numeroEconomico }} · Placas {{ s.unidad.placas }}</dd>
+          </div>
+          <div>
+            <dt>Configuración</dt>
+            <dd>{{ s.unidad.configuracion }}</dd>
+          </div>
+          @if (s.unidad.remolques.length) {
+            <div>
+              <dt>Remolque{{ s.unidad.remolques.length > 1 ? 's' : '' }}</dt>
+              <dd>{{ s.unidad.remolques.join(', ') }}</dd>
+            </div>
+          }
+          @if (s.notas) {
+            <div>
+              <dt>Notas de la salida</dt>
+              <dd>{{ s.notas }}</dd>
+            </div>
+          }
+          <div>
+            <dt>Salida</dt>
+            <dd>{{ s.folio }}</dd>
+          </div>
+        </dl>
+      </section>
+    }
+  }
+
+  <div class="acciones">
+    <button type="button" class="btn btn-secundario btn-bloque" [class.btn-ocupado]="estado() === 'cargando'" (click)="actualizar()">
+      {{ estado() === 'cargando' ? 'Actualizando…' : 'Actualizar' }}
+    </button>
+  </div>
+  @if (actualizadaEn()) {
+    <p class="texto-suave actualizado">Actualizado: {{ cuando(actualizadaEn()) }}</p>
+  }
+</main>

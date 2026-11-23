@@ -4,7 +4,7 @@ import { AlmacenSesion, MENSAJE_SESION_VENCIDA } from '../sesion/almacen-sesion'
 import { EntornoPruebas, configurar, crearEntorno, entrarComo } from '../../testing/entorno-pruebas';
 import { AsignacionService, claveCopiaAsignacion } from './asignacion.service';
 
-describe('AsignacionService: despacho del operador, también sin señal', () => {
+describe('AsignacionService: viaje del operador, también sin señal', () => {
   let e: EntornoPruebas;
   let servicio: AsignacionService;
   const CLAVE = claveCopiaAsignacion('ej-op-8112345678');
@@ -16,10 +16,10 @@ describe('AsignacionService: despacho del operador, también sin señal', () => 
     servicio = TestBed.inject(AsignacionService);
   });
 
-  it('carga el despacho y guarda una copia en el teléfono', async () => {
+  it('carga la salida con sus viajes y guarda una copia en el teléfono', async () => {
     await servicio.cargar();
     expect(servicio.estado()).toBe('listo');
-    expect(servicio.asignacion()?.despacho?.folio).toBe('DES-2026-00418');
+    expect(servicio.asignacion()?.salida?.folio).toBe('SAL-2026-00418');
     expect(servicio.desdeCopia()).toBe(false);
     expect(servicio.actualizadaEn()).toBe('2026-11-23T16:00:00Z');
     expect(JSON.parse(e.almacenLocal.getItem(CLAVE)!).guardadaEn).toBe('2026-11-23T16:00:00Z');
@@ -32,7 +32,7 @@ describe('AsignacionService: despacho del operador, también sin señal', () => 
     await servicio.cargar();
     expect(servicio.estado()).toBe('listo');
     expect(servicio.desdeCopia()).toBe(true);
-    expect(servicio.asignacion()?.despacho?.folio).toBe('DES-2026-00418');
+    expect(servicio.asignacion()?.salida?.folio).toBe('SAL-2026-00418');
     expect(servicio.error()).toBe('Sin conexión con la oficina. Se muestra lo guardado el 23/11/2026 10:00.');
   });
 
@@ -41,13 +41,13 @@ describe('AsignacionService: despacho del operador, también sin señal', () => 
     await servicio.cargar();
     expect(servicio.estado()).toBe('error');
     expect(servicio.asignacion()).toBeNull();
-    expect(servicio.error()).toBe('No se pudo cargar su despacho. Revise su señal e intente de nuevo.');
+    expect(servicio.error()).toBe('No se pudo cargar su viaje. Revise su señal e intente de nuevo.');
   });
 
-  it('sin despacho activo: despacho null (la pantalla lo dice)', async () => {
+  it('sin viaje: salida null (la pantalla lo dice)', async () => {
     await entrarComo('8112340000');
     await servicio.cargar();
-    expect(servicio.asignacion()).toEqual({ despacho: null, movimientosVacio: [] });
+    expect(servicio.asignacion()).toEqual({ salida: null });
   });
 
   it('sesión vencida: cierra la sesión con aviso', async () => {
@@ -63,6 +63,19 @@ describe('AsignacionService: despacho del operador, también sin señal', () => 
     expect(e.almacenLocal.getItem(CLAVE)).toBeNull();
     expect(servicio.asignacion()).toBeNull();
     expect(servicio.estado()).toBe('inicial');
+  });
+
+  it('una copia con el formato del paso 1 se ignora', async () => {
+    e.almacenLocal.setItem(CLAVE, JSON.stringify({ guardadaEn: 't', asignacion: { despacho: {}, movimientosVacio: [] } }));
+    e.navegador.onLine = false;
+    await servicio.cargar();
+    expect(servicio.estado()).toBe('error');
+  });
+
+  it('dos consultas al mismo tiempo usan una sola llamada', async () => {
+    const spy = vi.spyOn(TestBed.inject(OPERADOR_API), 'obtenerAsignacion');
+    await Promise.all([servicio.cargar(), servicio.cargar()]);
+    expect(spy).toHaveBeenCalledTimes(1);
   });
 
   it('asegurar: carga una sola vez por operador', async () => {

@@ -5,7 +5,8 @@ import { AsignacionOperador, IsoUtc } from '../api/operador-api.modelos';
 import { ALMACEN_LOCAL, PREFIJO_CLAVES, RELOJ } from '../plataforma';
 import { AlmacenSesion, MENSAJE_SESION_VENCIDA } from '../sesion/almacen-sesion';
 
-export const claveCopiaAsignacion = (operadorId: string) => `${PREFIJO_CLAVES}asignacion.${operadorId}`;
+/** v2 = paso 2 (salida con viajes). La copia del paso 1 (formato anterior) se ignora. */
+export const claveCopiaAsignacion = (operadorId: string) => `${PREFIJO_CLAVES}asignacion.v2.${operadorId}`;
 
 interface CopiaAsignacion {
   guardadaEn: IsoUtc;
@@ -14,9 +15,15 @@ interface CopiaAsignacion {
 
 export type EstadoCarga = 'inicial' | 'cargando' | 'listo' | 'error';
 
+function esCopiaValida(c: unknown): c is CopiaAsignacion {
+  const x = c as CopiaAsignacion | null;
+  if (!x || typeof x.guardadaEn !== 'string' || !x.asignacion || !('salida' in x.asignacion)) return false;
+  return x.asignacion.salida === null || Array.isArray(x.asignacion.salida.viajes);
+}
+
 /**
- * Lo asignado al operador (despacho activo y movimientos en vacío). Guarda una copia en el teléfono para poder ver el
- * despacho sin señal; la copia se borra al cerrar sesión.
+ * Lo asignado al operador: la salida con sus viajes, su estatus actual e historial. Guarda una copia en el teléfono
+ * para poder ver el viaje sin señal; la copia se borra al cerrar sesión.
  */
 @Injectable({ providedIn: 'root' })
 export class AsignacionService {
@@ -31,6 +38,7 @@ export class AsignacionService {
   private readonly desdeCopiaSig = signal(false);
   private readonly errorSig = signal<string | null>(null);
   private operadorCargado: string | null = null;
+  private enCurso: Promise<void> | null = null;
 
   readonly estado = this.estadoSig.asReadonly();
   readonly asignacion = this.asignacionSig.asReadonly();
@@ -44,7 +52,13 @@ export class AsignacionService {
     if (this.operadorCargado !== this.sesion.operadorId() || this.estadoSig() === 'inicial') await this.cargar();
   }
 
-  async cargar(): Promise<void> {
+  /** Consulta al servidor. Si ya hay una consulta en curso, espera esa misma. */
+  cargar(): Promise<void> {
+    this.enCurso ??= this.consultar().finally(() => (this.enCurso = null));
+    return this.enCurso;
+  }
+
+  private async consultar(): Promise<void> {
     const operadorId = this.sesion.operadorId();
     if (!operadorId) return;
     if (this.operadorCargado !== operadorId) this.reiniciar();
@@ -74,7 +88,7 @@ export class AsignacionService {
       this.errorSig.set(
         hayCopia
           ? `Sin conexión con la oficina. Se muestra lo guardado el ${fechaHoraNegocio(this.actualizadaEnSig())}.`
-          : 'No se pudo cargar su despacho. Revise su señal e intente de nuevo.',
+          : 'No se pudo cargar su viaje. Revise su señal e intente de nuevo.',
       );
     }
   }
@@ -96,8 +110,8 @@ export class AsignacionService {
 
   private usarCopia(operadorId: string): boolean {
     try {
-      const copia = JSON.parse(this.almacen.getItem(claveCopiaAsignacion(operadorId)) ?? 'null') as CopiaAsignacion | null;
-      if (!copia?.asignacion || !Array.isArray(copia.asignacion.movimientosVacio)) return false;
+      const copia: unknown = JSON.parse(this.almacen.getItem(claveCopiaAsignacion(operadorId)) ?? 'null');
+      if (!esCopiaValida(copia)) return false;
       this.asignacionSig.set(copia.asignacion);
       this.actualizadaEnSig.set(copia.guardadaEn);
       this.desdeCopiaSig.set(true);

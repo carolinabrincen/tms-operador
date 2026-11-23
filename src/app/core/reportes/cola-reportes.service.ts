@@ -12,21 +12,15 @@ import {
 import { generarIdReporte } from '../../shared/utils/id-reporte.util';
 import { ahoraIsoUtc } from '../../shared/utils/zona-negocio.util';
 import { OPERADOR_API, comoErrorApi } from '../api/operador-api';
-import { ObjetivoReporte, PuntoGps, TipoAvance } from '../api/operador-api.modelos';
+import { ReporteEstatus, ReporteIncidencia } from '../api/operador-api.modelos';
 import { ConexionService } from '../conexion/conexion.service';
 import { NAVEGADOR, RELOJ } from '../plataforma';
 import { AlmacenSesion, MENSAJE_SESION_VENCIDA } from '../sesion/almacen-sesion';
 import { ALMACEN_REPORTES } from './almacen-reportes';
 import { ReporteLocal } from './reporte-local';
 
-export interface NuevoReporte {
-  objetivo: ObjetivoReporte;
-  avance: TipoAvance;
-  ocurrioEn: string;
-  ubicacion: PuntoGps | null;
-  nota: string | null;
-  resumen: string;
-}
+/** Un reporte por registrar: todo menos el id (lo pone la cola) y el texto para mostrarlo en la lista. */
+export type NuevoReporte = (Omit<ReporteEstatus, 'id'> | Omit<ReporteIncidencia, 'id'>) & { resumen: string };
 
 /**
  * Cola de reportes del teléfono. Cada reporte:
@@ -48,6 +42,7 @@ export class ColaReportesService {
   private readonly todosSig = signal<ReporteLocal[]>([]);
   private readonly enviandoSig = signal(false);
   private readonly reintentoSig = signal<string | null>(null);
+  private readonly enviadosSig = signal(0);
   private readonly cargaInicial: Promise<void>;
   private corriendo: Promise<void> | null = null;
   private repetir = false;
@@ -64,6 +59,8 @@ export class ColaReportesService {
   /** Cuándo será el próximo reintento automático (ISO), o null. */
   readonly proximoReintento = this.reintentoSig.asReadonly();
   readonly persistente = () => this.almacen.persistente;
+  /** Sube cada vez que el servidor recibe un reporte o confirma un hito: las pantallas lo usan para releer el viaje. */
+  readonly enviados = this.enviadosSig.asReadonly();
 
   constructor() {
     this.cargaInicial = this.recargar();
@@ -92,19 +89,9 @@ export class ColaReportesService {
     const operadorId = this.sesion.operadorId();
     if (!operadorId) throw new Error('No hay sesión: no se puede registrar el reporte.');
     await this.cargaInicial;
-    const local = crearReporteLocal(
-      {
-        id: generarIdReporte(),
-        objetivo: nuevo.objetivo,
-        avance: nuevo.avance,
-        ocurrioEn: nuevo.ocurrioEn,
-        ubicacion: nuevo.ubicacion,
-        nota: nuevo.nota?.trim() ? nuevo.nota.trim() : null,
-      },
-      operadorId,
-      nuevo.resumen,
-      ahoraIsoUtc(this.reloj()),
-    );
+    const { resumen, ...datos } = nuevo;
+    const reporte = { ...datos, id: generarIdReporte(), nota: datos.nota?.trim() ? datos.nota.trim() : null } as ReporteEstatus | ReporteIncidencia;
+    const local = crearReporteLocal(reporte, operadorId, resumen, ahoraIsoUtc(this.reloj()));
     await this.almacen.guardar(local); // PRIMERO se guarda…
     this.poner(local);
     void this.pedirPersistencia();
@@ -135,21 +122,24 @@ export class ColaReportesService {
     return this.corriendo;
   }
 
-  /** Pregunta al servidor si la oficina ya confirmó los reportes enviados. Sin conexión no hace nada. */
+  /** Pregunta al servidor si la oficina ya confirmó los hitos enviados. Sin conexión no hace nada. */
   async actualizarEstados(): Promise<void> {
     await this.cargaInicial;
     const operadorId = this.sesion.operadorId();
     if (!operadorId || !this.conexion.enLinea()) return;
-    const enviados = porConfirmar(this.todosSig(), operadorId);
-    if (!enviados.length) return;
+    const esperando = porConfirmar(this.todosSig(), operadorId);
+    if (!esperando.length) return;
     try {
-      const remotos = await this.api.consultarReportes(enviados.map((r) => r.id));
+      const remotos = await this.api.consultarReportes(esperando.map((r) => r.id));
       const ahora = ahoraIsoUtc(this.reloj());
       for (const remoto of remotos) {
         const actual = this.todosSig().find((r) => r.id === remoto.id);
         if (!actual) continue;
         const nuevo = conEstadoRemoto(actual, remoto, ahora);
-        if (nuevo !== actual) await this.guardarYPoner(nuevo);
+        if (nuevo !== actual) {
+          await this.guardarYPoner(nuevo);
+          this.enviadosSig.update((n) => n + 1);
+        }
       }
     } catch (e) {
       if (comoErrorApi(e).tipo === 'sesion') this.sesion.vencer(MENSAJE_SESION_VENCIDA);
@@ -178,6 +168,7 @@ export class ColaReportesService {
       try {
         const acuse = await this.api.enviarReporte(r.reporte);
         await this.guardarYPoner(conEnvioExitoso(r, acuse, ahoraIsoUtc(this.reloj())));
+        this.enviadosSig.update((n) => n + 1);
       } catch (e) {
         const error = comoErrorApi(e);
         const actualizado = conFallaEnvio(r, error.tipo, error.message, ahoraIsoUtc(this.reloj()));

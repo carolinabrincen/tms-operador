@@ -1,24 +1,23 @@
 import { TestBed } from '@angular/core/testing';
-import { despachoEjemplo } from '../api/ejemplo/datos-ejemplo';
 import { OperadorApiEjemplo } from '../api/ejemplo/operador-api-ejemplo';
 import { ErrorApiOperador, OPERADOR_API } from '../api/operador-api';
 import { AlmacenSesion, MENSAJE_SESION_VENCIDA } from '../sesion/almacen-sesion';
-import { objetivoDeTramo } from '../../shared/utils/avances.util';
+import { EstatusViaje } from '../api/operador-api.modelos';
 import { FORMATO_UUID_V4 } from '../../shared/utils/id-reporte.util';
 import { EntornoPruebas, configurar, crearEntorno, entrarComo, ponerEnLinea } from '../../testing/entorno-pruebas';
 import { AlmacenReportesIndexedDb } from './almacen-reportes';
 import { ColaReportesService, NuevoReporte } from './cola-reportes.service';
 
-const despacho = despachoEjemplo(new Date('2026-11-23T16:00:00Z'));
-
-function nuevo(avance: NuevoReporte['avance'] = 'sali', tramo = despacho.tramos[0]): NuevoReporte {
+/** Reporte de estatus sobre el viaje 2 (cargado) del ejemplo. */
+function nuevo(estatus: EstatusViaje = 'EnPosicionamiento', viajeId = 'ej-via-771'): NuevoReporte {
   return {
-    objetivo: objetivoDeTramo(despacho, tramo),
-    avance,
+    tipo: 'estatus',
+    viajeId,
+    estatus,
     ocurrioEn: '2026-11-23T16:00:00Z',
     ubicacion: { lat: 25.68, lng: -100.31, precisionM: 10, tomadoEn: '2026-11-23T16:00:00Z' },
     nota: '  Todo bien  ',
-    resumen: 'Tramo 1',
+    resumen: 'Viaje 2',
   };
 }
 
@@ -65,9 +64,9 @@ describe('ColaReportesService: guardar primero, enviar después, reintentar sin 
 
   it('al recuperar la conexión se envían solos, en orden', async () => {
     ponerEnLinea(e, false);
-    const a = await cola.registrar(nuevo('sali'));
+    const a = await cola.registrar(nuevo('EnPosicionamiento'));
     e.reloj.ahora = new Date('2026-11-23T16:05:00Z');
-    const b = await cola.registrar(nuevo('llegue'));
+    const b = await cola.registrar(nuevo('EnPatioOrigen'));
     await cola.inactivo();
     expect(cola.pendientes()).toBe(2);
     const envios: string[] = [];
@@ -115,12 +114,12 @@ describe('ColaReportesService: guardar primero, enviar después, reintentar sin 
 
   it('un reporte rechazado no se reintenta ni detiene a los demás', async () => {
     ponerEnLinea(e, false);
-    const malo = await cola.registrar(nuevo('cargado')); // "Cargado" no aplica a un tramo vacío
-    const bueno = await cola.registrar(nuevo('sali'));
+    const malo = await cola.registrar(nuevo('EnTransitoVacio')); // no aplica a un viaje cargado
+    const bueno = await cola.registrar(nuevo('EnPosicionamiento'));
     ponerEnLinea(e, true);
     await vi.waitFor(() => expect(cola.pendientes()).toBe(0));
     const porId = Object.fromEntries(cola.reportes().map((r) => [r.id, r]));
-    expect(porId[malo.id]).toMatchObject({ estado: 'rechazado', error: 'Ese avance no aplica a este tramo.' });
+    expect(porId[malo.id]).toMatchObject({ estado: 'rechazado', error: 'Ese estatus no lo puede poner el operador en este viaje.' });
     expect(porId[bueno.id].estado).toBe('enviado');
   });
 
@@ -153,14 +152,45 @@ describe('ColaReportesService: guardar primero, enviar después, reintentar sin 
     await expect(cola.registrar(nuevo())).rejects.toThrow('No hay sesión');
   });
 
-  it('actualizar estados: marca "Confirmado por oficina" lo que la oficina ya confirmó', async () => {
-    await cola.registrar(nuevo());
+  it('hito: queda "Pendiente de confirmar por oficina" y al actualizar estados pasa a "Confirmado"', async () => {
+    await cola.registrar(nuevo('Documentado'));
     await cola.inactivo();
+    expect(cola.reportes()[0].estado).toBe('por-confirmar');
+    const antes = cola.enviados();
     await cola.actualizarEstados();
-    expect(cola.reportes()[0].estado).toBe('enviado');
+    expect(cola.reportes()[0].estado).toBe('por-confirmar');
+    expect(cola.enviados()).toBe(antes);
     e.reloj.ahora = new Date('2026-11-23T16:00:30Z');
     await cola.actualizarEstados();
     expect(cola.reportes()[0]).toMatchObject({ estado: 'confirmado', confirmadoEn: '2026-11-23T16:00:20Z' });
     expect((await enDisco())[0].estado).toBe('confirmado');
+    expect(cola.enviados()).toBe(antes + 1); // avisa a las pantallas para releer el viaje
+  });
+
+  it('incidencia: se guarda y se envía igual que un estatus; queda "Enviado"', async () => {
+    const r = await cola.registrar({
+      tipo: 'incidencia',
+      viajeId: 'ej-via-771',
+      incidencia: 'DetenidoParador',
+      ocurrioEn: '2026-11-23T16:00:00Z',
+      ubicacion: null,
+      nota: null,
+      resumen: 'Viaje 2',
+    });
+    await cola.inactivo();
+    expect(r.reporte).toMatchObject({ tipo: 'incidencia', incidencia: 'DetenidoParador' });
+    expect(cola.reportes()[0].estado).toBe('enviado');
+  });
+
+  it('paso que la oficina ya rebasó: "Enviado" con aviso (sin efecto)', async () => {
+    await cola.registrar(nuevo('EnCarga'));
+    await cola.inactivo();
+    e.reloj.ahora = new Date('2026-11-23T16:00:30Z'); // la oficina pone Documentado por su cuenta
+    ponerEnLinea(e, false);
+    await cola.registrar(nuevo('EnPatioOrigen'));
+    ponerEnLinea(e, true);
+    await vi.waitFor(() => expect(cola.pendientes()).toBe(0));
+    const atrasado = cola.reportes().find((r) => r.reporte.tipo === 'estatus' && r.reporte.estatus === 'EnPatioOrigen')!;
+    expect(atrasado).toMatchObject({ estado: 'enviado', aviso: expect.stringContaining('«Documentado»') });
   });
 });

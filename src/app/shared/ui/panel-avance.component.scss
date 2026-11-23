@@ -1,0 +1,41 @@
+.panel {
+  display: grid;
+  gap: 12px;
+  margin: 12px 0 4px;
+}
+.panel-estatus {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 1.1rem;
+}
+.paso-siguiente {
+  min-height: 72px;
+  font-size: 1.35rem;
+}
+.paso-nota {
+  margin: -4px 0 0;
+}
+.otros-pasos summary {
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  font-weight: 700;
+  color: var(--c-primario);
+  cursor: pointer;
+}
+.otros-lista,
+.opciones {
+  display: grid;
+  gap: 10px;
+  margin: 8px 0;
+}
+.incidencia {
+  border-color: #7a5b00;
+  background: var(--c-aviso-fondo);
+}
+.hoja-viaje {
+  margin-top: 12px;
+}

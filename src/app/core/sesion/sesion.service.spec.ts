@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
-import { AsignacionService, claveCopiaAsignacion } from '../despacho/asignacion.service';
+import { AsignacionService, claveCopiaAsignacion } from '../viaje/asignacion.service';
 import { AlmacenReportesIndexedDb } from '../reportes/almacen-reportes';
 import { ColaReportesService } from '../reportes/cola-reportes.service';
 import { EntornoPruebas, configurar, crearEntorno } from '../../testing/entorno-pruebas';
@@ -31,19 +31,20 @@ describe('SesionService: entrar y salir sin guardar el PIN', () => {
     expect(e.almacenLocal.getItem(CLAVE_SESION)).toBeNull();
   });
 
-  it('salir: borra sesión y copia del despacho, va a acceso; los reportes pendientes se quedan en el teléfono', async () => {
+  it('salir: borra sesión y copia del viaje, va a acceso; los reportes pendientes se quedan en el teléfono', async () => {
     const navegar = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
     await sesion.entrar('8112345678', '1234');
     await TestBed.inject(AsignacionService).cargar();
     e.navegador.onLine = false;
     const cola = TestBed.inject(ColaReportesService);
     await cola.registrar({
-      objetivo: { tipo: 'movimiento', movimientoId: 'ej-mov-93' },
-      avance: 'sali',
+      tipo: 'estatus',
+      viajeId: 'ej-via-770',
+      estatus: 'EnTransitoVacio',
       ocurrioEn: '2026-11-23T16:00:00Z',
       ubicacion: null,
       nota: null,
-      resumen: 'Mov',
+      resumen: 'Viaje 1',
     });
     await sesion.salir();
     expect(sesion.sesion()).toBeNull();
