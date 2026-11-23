@@ -1,0 +1,69 @@
+<main class="pagina">
+  <h1>Bienvenido</h1>
+  <p class="acceso-intro">Entre con su número de celular y el PIN que le dio la oficina.</p>
+
+  @if (aviso()) {
+    <p class="alerta alerta-aviso" role="status">{{ aviso() }}</p>
+  }
+
+  <form (submit)="entrar($event)" novalidate>
+    <div class="campo">
+      <label for="celular">Celular (10 dígitos)</label>
+      <input
+        id="celular"
+        name="celular"
+        type="tel"
+        inputmode="numeric"
+        autocomplete="tel-national"
+        maxlength="20"
+        placeholder="81 1234 5678"
+        [value]="celular()"
+        (input)="escribir('celular', $event)"
+        [attr.aria-invalid]="intentado() && !!errorCelular()"
+        aria-describedby="celular-error"
+      />
+      @if (intentado() && errorCelular()) {
+        <p class="campo-error" id="celular-error">{{ errorCelular() }}</p>
+      }
+    </div>
+
+    <div class="campo">
+      <label for="pin">PIN</label>
+      <div class="campo-con-boton">
+        <input
+          id="pin"
+          name="pin"
+          [type]="verPin() ? 'text' : 'password'"
+          inputmode="numeric"
+          autocomplete="off"
+          [attr.maxlength]="PIN_MAX"
+          [value]="pin()"
+          (input)="escribir('pin', $event)"
+          [attr.aria-invalid]="intentado() && !!errorPin()"
+          aria-describedby="pin-error"
+        />
+        <button type="button" class="btn btn-secundario" (click)="verPin.set(!verPin())" [attr.aria-pressed]="verPin()">
+          {{ verPin() ? 'Ocultar' : 'Ver' }}
+        </button>
+      </div>
+      @if (intentado() && errorPin()) {
+        <p class="campo-error" id="pin-error">{{ errorPin() }}</p>
+      }
+    </div>
+
+    @if (errorGeneral()) {
+      <p class="alerta alerta-error" role="alert">{{ errorGeneral() }}</p>
+    }
+
+    <button type="submit" class="btn btn-primario btn-bloque" [class.btn-ocupado]="entrando()" [attr.aria-busy]="entrando()">
+      {{ entrando() ? 'Entrando…' : 'Entrar' }}
+    </button>
+  </form>
+
+  @if (esEjemplo) {
+    <p class="alerta alerta-info acceso-ejemplo">
+      <strong>Datos de ejemplo:</strong> cualquier celular de 10 dígitos con un PIN de 4 a {{ PIN_MAX }} números entra. Si el
+      celular termina en 0000 verá la pantalla “sin despacho activo”.
+    </p>
+  }
+</main>

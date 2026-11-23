@@ -1,0 +1,92 @@
+<main class="pagina">
+  <a routerLink="/despacho" class="enlace-volver">‹ Mi despacho</a>
+  <h1>Reportar avance</h1>
+
+  @if (objetivo(); as o) {
+    <p class="ruta">{{ o.titulo }}</p>
+
+    @if (o.queToca) {
+      <p class="alerta alerta-aviso">Este no es el tramo que le toca ahora (le toca el {{ o.queToca }}). Revise antes de reportar.</p>
+    }
+    @if (terminado()) {
+      <p class="alerta alerta-info">Ya reportó “Terminé” en este {{ o.nombre }}. Puede volver a reportar si se equivocó.</p>
+    } @else {
+      <p>Toque lo que acaba de pasar. Su reporte le llega a la oficina, que lo confirma.</p>
+    }
+
+    <div class="avances" role="list">
+      @for (av of o.secuencia; track av) {
+        @let hecho = hechoCuando(av);
+        <button
+          type="button"
+          role="listitem"
+          class="btn btn-bloque avance"
+          [class.btn-primario]="av === siguiente()"
+          [class.btn-secundario]="av !== siguiente()"
+          [class.avance-hecho]="hecho"
+          (click)="abrir(av)"
+        >
+          <span class="avance-nombre">{{ ETIQUETA[av] }}</span>
+          @if (hecho) {
+            <span class="avance-estado">✓ {{ hecho }}</span>
+          } @else if (av === siguiente()) {
+            <span class="avance-estado">Siguiente</span>
+          }
+        </button>
+      }
+    </div>
+
+    <h2>Reportes de este {{ o.nombre }}</h2>
+    @for (r of historial(); track r.id) {
+      <app-reporte-item [reporte]="r" [mostrarResumen]="false" />
+    } @empty {
+      <p class="texto-suave">Aún no ha reportado avances aquí.</p>
+    }
+  } @else if (estadoCarga() === 'cargando' || estadoCarga() === 'inicial') {
+    <p class="texto-suave" role="status">Cargando…</p>
+  } @else {
+    <p class="alerta alerta-aviso" role="status">
+      No encontramos este {{ tipo() === 'movimiento' ? 'movimiento' : 'tramo' }} en lo que tiene asignado. Regrese a Mi despacho y
+      actualice.
+    </p>
+  }
+</main>
+
+@if (borrador(); as b) {
+  <div class="velo" (click)="cancelar()">
+    <section class="hoja" role="dialog" aria-modal="true" aria-labelledby="titulo-confirmar" (click)="$event.stopPropagation()">
+      <h2 id="titulo-confirmar">¿Reportar “{{ ETIQUETA[b.avance] }}”?</h2>
+      <p class="ruta">{{ objetivo()?.titulo }}</p>
+      <p>
+        <strong>Hora:</strong> {{ fechaHora(b.ocurrioEn) }}<br />
+        <span class="texto-suave">({{ TEXTO_ZONA }})</span>
+      </p>
+
+      @if (b.repetidoCuando) {
+        <p class="alerta alerta-aviso">Ya había reportado “{{ ETIQUETA[b.avance] }}” ({{ b.repetidoCuando }}). Si lo envía, quedará otro reporte.</p>
+      }
+
+      <div class="campo">
+        <label for="nota">Nota (opcional)</label>
+        <textarea id="nota" rows="3" [attr.maxlength]="LARGO_NOTA" [value]="nota()" (input)="escribirNota($event)"></textarea>
+      </div>
+
+      @if (b.explicarUbicacion) {
+        <p class="alerta alerta-info"><strong>Ubicación.</strong> {{ EXPLICACION_UBICACION }}</p>
+      }
+      <p class="texto-suave">{{ textoUbicacion(b.permiso) }}</p>
+
+      @if (buscandoUbicacion()) {
+        <p class="alerta alerta-info" role="status">Buscando su ubicación…</p>
+        <button type="button" class="btn btn-secundario btn-bloque" (click)="sinUbicacion()">Enviar sin ubicación</button>
+      } @else {
+        <div class="acciones">
+          <button type="button" class="btn btn-primario btn-bloque" [class.btn-ocupado]="guardando()" (click)="confirmar()">
+            {{ guardando() ? 'Guardando…' : 'Enviar reporte' }}
+          </button>
+          <button type="button" class="btn btn-secundario btn-bloque" (click)="cancelar()">Cancelar</button>
+        </div>
+      }
+    </section>
+  </div>
+}

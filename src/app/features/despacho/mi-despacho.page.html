@@ -1,0 +1,182 @@
+<main class="pagina">
+  <h1>Mi despacho</h1>
+
+  @if (error()) {
+    <p class="alerta" [class.alerta-aviso]="asignacion()" [class.alerta-error]="!asignacion()" role="status">{{ error() }}</p>
+  }
+
+  @if (!asignacion()) {
+    @if (estado() !== 'error') {
+      <p class="texto-suave" role="status">Cargando su despacho…</p>
+    }
+  } @else {
+    @if (despacho(); as d) {
+      <!-- Lo que toca ahora: la acción principal, arriba y grande. -->
+      @if (tramoActual(); as t) {
+        <section class="tarjeta tarjeta-destacada" aria-labelledby="titulo-ahora">
+          <p class="ahora-etiqueta" id="titulo-ahora">Le toca</p>
+          <h2>Tramo {{ t.orden }} · {{ t.tipo === 'cargado' ? 'Cargado' : 'Vacío' }}</h2>
+          <p class="ruta">{{ ruta(t).origen }} → {{ ruta(t).destino }}</p>
+          @if (siguienteActual(); as s) {
+            <p class="ahora-siguiente">Siguiente avance: <strong>{{ ETIQUETA[s] }}</strong></p>
+          }
+          <a class="btn btn-primario btn-bloque" [routerLink]="['/avance', 'tramo', t.id]">Reportar avance</a>
+        </section>
+      } @else {
+        <section class="tarjeta tarjeta-destacada">
+          <h2>Tramos terminados</h2>
+          <p>Ya reportó “Terminé” en todos los tramos. La oficina confirmará el cierre del despacho.</p>
+        </section>
+      }
+
+      <section class="tarjeta" aria-labelledby="titulo-despacho">
+        <div class="tarjeta-cabeza">
+          <h2 id="titulo-despacho">Despacho {{ d.folio }}</h2>
+        </div>
+        <dl class="datos">
+          <div>
+            <dt>Unidad</dt>
+            <dd>{{ d.unidad.numeroEconomico }} · Placas {{ d.unidad.placas }}</dd>
+          </div>
+          <div>
+            <dt>Configuración</dt>
+            <dd>{{ d.unidad.configuracion }}</dd>
+          </div>
+          @if (d.unidad.remolques.length) {
+            <div>
+              <dt>Remolque{{ d.unidad.remolques.length > 1 ? 's' : '' }}</dt>
+              <dd>{{ d.unidad.remolques.join(', ') }}</dd>
+            </div>
+          }
+          @if (d.notas) {
+            <div>
+              <dt>Notas</dt>
+              <dd>{{ d.notas }}</dd>
+            </div>
+          }
+        </dl>
+      </section>
+
+      <h2>Tramos</h2>
+      <p class="texto-suave">Horas en {{ TEXTO_ZONA }}.</p>
+      @for (t of tramos(); track t.id) {
+        <article class="tarjeta" [class.tarjeta-destacada]="t === tramoActual()" [class.tarjeta-apagada]="tramoTerminado(t)">
+          <div class="tarjeta-cabeza">
+            <h3>Tramo {{ t.orden }} · {{ t.tipo === 'cargado' ? 'Cargado' : 'Vacío' }}</h3>
+            @if (t === tramoActual()) {
+              <span class="chip chip-toca">Le toca</span>
+            } @else if (tramoTerminado(t)) {
+              <span class="chip chip-hecho">Terminado</span>
+            }
+          </div>
+          <p class="ruta">{{ ruta(t).origen }} → {{ ruta(t).destino }}</p>
+
+          @if (t.tipo === 'cargado') {
+            @let v = t.viaje;
+            <dl class="datos">
+              <div>
+                <dt>Cliente</dt>
+                <dd>{{ v.cliente }}</dd>
+              </div>
+              <div>
+                <dt>Origen</dt>
+                <dd>{{ v.origen }}</dd>
+              </div>
+              <div>
+                <dt>Destino</dt>
+                <dd>{{ v.destino }}</dd>
+              </div>
+              <div>
+                <dt>Cita de carga</dt>
+                <dd [title]="fechaHora(v.citaCarga)">{{ cuando(v.citaCarga) || 'Sin cita' }}</dd>
+              </div>
+              <div>
+                <dt>Cita de descarga</dt>
+                <dd [title]="fechaHora(v.citaDescarga)">{{ cuando(v.citaDescarga) || 'Sin cita' }}</dd>
+              </div>
+              <div>
+                <dt>Producto</dt>
+                <dd>{{ v.producto }}</dd>
+              </div>
+              <div>
+                <dt>Toneladas programadas</dt>
+                <dd>{{ toneladas(v.toneladasProgramadas) }}</dd>
+              </div>
+              <div>
+                <dt>Referencia</dt>
+                <dd>{{ v.referencia || 'Sin referencia' }}</dd>
+              </div>
+              @if (v.notas) {
+                <div>
+                  <dt>Notas</dt>
+                  <dd>{{ v.notas }}</dd>
+                </div>
+              }
+              <div>
+                <dt>Viaje</dt>
+                <dd>{{ v.folio }}</dd>
+              </div>
+            </dl>
+          } @else if (t.notas) {
+            <p>{{ t.notas }}</p>
+          }
+        </article>
+      }
+    } @else {
+      <section class="tarjeta tarjeta-destacada" role="status">
+        <h2>No tiene un despacho activo</h2>
+        <p>Cuando la oficina le asigne uno, aparecerá aquí. Si cree que es un error, llame a la oficina.</p>
+      </section>
+    }
+
+    @if (movimientos().length) {
+      <h2>Movimientos en vacío</h2>
+      @for (m of movimientos(); track m.id) {
+        <article class="tarjeta" [class.tarjeta-apagada]="movimientoTerminado(m)">
+          <div class="tarjeta-cabeza">
+            <h3>{{ m.motivo }}</h3>
+            @if (movimientoTerminado(m)) {
+              <span class="chip chip-hecho">Terminado</span>
+            }
+          </div>
+          <p class="ruta">{{ m.origen }} → {{ m.destino }}</p>
+          <dl class="datos">
+            <div>
+              <dt>Folio</dt>
+              <dd>{{ m.folio }}</dd>
+            </div>
+            <div>
+              <dt>Unidad</dt>
+              <dd>{{ m.unidad.numeroEconomico }} · Placas {{ m.unidad.placas }}</dd>
+            </div>
+            @if (m.programadoPara) {
+              <div>
+                <dt>Programado</dt>
+                <dd [title]="fechaHora(m.programadoPara)">{{ cuando(m.programadoPara) }}</dd>
+              </div>
+            }
+            @if (m.notas) {
+              <div>
+                <dt>Notas</dt>
+                <dd>{{ m.notas }}</dd>
+              </div>
+            }
+          </dl>
+          @if (!movimientoTerminado(m)) {
+            <p class="ahora-siguiente">Siguiente avance: <strong>{{ siguienteMovimiento(m) }}</strong></p>
+            <a class="btn btn-primario btn-bloque" [routerLink]="['/avance', 'movimiento', m.id]">Reportar avance</a>
+          }
+        </article>
+      }
+    }
+  }
+
+  <div class="acciones">
+    <button type="button" class="btn btn-secundario btn-bloque" [class.btn-ocupado]="estado() === 'cargando'" (click)="actualizar()">
+      {{ estado() === 'cargando' ? 'Actualizando…' : 'Actualizar' }}
+    </button>
+  </div>
+  @if (actualizadaEn()) {
+    <p class="texto-suave actualizado">Actualizado: {{ cuando(actualizadaEn()) }}</p>
+  }
+</main>

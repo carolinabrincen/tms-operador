@@ -1,0 +1,42 @@
+<main class="pagina">
+  <h1>Mis reportes</h1>
+
+  @if (!cola.persistente()) {
+    <p class="alerta alerta-aviso">
+      Este navegador no guarda los reportes si se cierra (¿modo privado?). No cierre la aplicación hasta que estén enviados.
+    </p>
+  }
+
+  @if (cola.pendientes() > 0) {
+    <section class="tarjeta tarjeta-destacada">
+      <h2>{{ textoPendientes(cola.pendientes()) }}</h2>
+      <p>
+        Están guardados en su teléfono y se envían solos cuando hay señal.
+        @if (cola.proximoReintento(); as p) {
+          Próximo intento: {{ hora(p) }}.
+        }
+      </p>
+      <button type="button" class="btn btn-primario btn-bloque" [class.btn-ocupado]="cola.enviando()" (click)="enviarAhora()">
+        {{ cola.enviando() ? 'Enviando…' : 'Enviar ahora' }}
+      </button>
+    </section>
+  }
+
+  <ul class="leyenda" aria-label="Qué significa cada estado">
+    <li><span class="chip chip-pendiente">Pendiente de enviar</span> guardado en el teléfono</li>
+    <li><span class="chip chip-enviado">Enviado</span> la oficina lo recibió</li>
+    <li><span class="chip chip-confirmado">Confirmado por oficina</span> la oficina lo revisó</li>
+  </ul>
+
+  @for (r of cola.reportes(); track r.id) {
+    <app-reporte-item [reporte]="r" />
+  } @empty {
+    <p class="tarjeta">Aún no ha reportado avances. Para reportar, vaya a <a routerLink="/despacho">Mi despacho</a>.</p>
+  }
+
+  @if (cola.reportes().length) {
+    <div class="acciones">
+      <button type="button" class="btn btn-secundario btn-bloque" (click)="actualizarEstados()">Actualizar estados</button>
+    </div>
+  }
+</main>
