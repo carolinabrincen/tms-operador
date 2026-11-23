@@ -22,6 +22,8 @@
   --c-info-fondo: #e3ecfb;
   --c-enfoque: #ffb000;
 
+  /* Tamaño del texto normal: las etiquetas de estatus se calculan a partir de él. */
+  --texto-normal: 18px;
   --radio: 12px;
   --alto-boton: 56px;
   --alto-cabecera: 56px;
@@ -48,7 +50,7 @@ body {
   background: var(--c-fondo);
   color: var(--c-texto);
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  font-size: 18px;
+  font-size: var(--texto-normal);
   line-height: 1.45;
   -webkit-tap-highlight-color: transparent;
 }

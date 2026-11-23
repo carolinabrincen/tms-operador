@@ -3,6 +3,7 @@
 
   @if (viaje(); as v) {
     <h1>Viaje {{ v.orden }} · {{ v.tipo === 'cargado' ? 'Cargado' : 'Vacío' }}</h1>
+    <app-etiqueta-estatus [estatus]="guiaViaje()!.estatus" [marca]="marca()" />
     <p class="ruta">{{ ruta(v).origen }} → {{ ruta(v).destino }}</p>
 
     @if (v.estatus !== 'Cerrado' && toca() && toca() !== v) {

@@ -49,6 +49,48 @@ export const BOTON_ESTATUS: Readonly<Partial<Record<EstatusViaje, string>>> = {
   EnTaller: 'Llegué al taller',
 };
 
+/** Cómo se ve un estatus: texto y colores (fondo y letra). */
+export interface PresentacionEstatus {
+  texto: string;
+  fondo: string;
+  tinta: string;
+}
+
+/**
+ * Colores por etapa (todos con contraste ≥ 7:1, se verifica en pruebas). El azul de la marca queda para los botones,
+ * para que una etiqueta de estatus no se confunda con algo que se toca.
+ */
+const COLORES_ETAPA = {
+  asignado: { fondo: '#3d4654', tinta: '#ffffff' }, // gris: aún no empieza
+  camino: { fondo: '#7a3400', tinta: '#ffffff' }, // café-naranja: en carretera
+  patio: { fondo: '#0b5563', tinta: '#ffffff' }, // verde azulado: esperando en patio
+  maniobra: { fondo: '#5b2a86', tinta: '#ffffff' }, // morado: cargando o descargando
+  hito: { fondo: '#0d5c27', tinta: '#ffffff' }, // verde: documentado o descargado
+  taller: { fondo: '#a1121a', tinta: '#ffffff' }, // rojo: en taller
+  cerrado: { fondo: '#e4e7eb', tinta: '#0b0f14' }, // claro: ya terminó
+} as const;
+
+const ETAPA: Readonly<Record<EstatusViaje, keyof typeof COLORES_ETAPA>> = {
+  Asignado: 'asignado',
+  EnPosicionamiento: 'camino',
+  EnPatioOrigen: 'patio',
+  EnCarga: 'maniobra',
+  Documentado: 'hito',
+  EnTransito: 'camino',
+  EnPatioDestino: 'patio',
+  EnDescarga: 'maniobra',
+  Descargado: 'hito',
+  Cerrado: 'cerrado',
+  EnTransitoVacio: 'camino',
+  EnPatio: 'patio',
+  EnTaller: 'taller',
+};
+
+/** ÚNICA fuente de texto y color de un estatus en pantalla. */
+export function presentacionEstatus(e: EstatusViaje): PresentacionEstatus {
+  return { texto: ETIQUETA_ESTATUS[e], ...COLORES_ETAPA[ETAPA[e]] };
+}
+
 export const HITOS: ReadonlySet<EstatusViaje> = new Set<EstatusViaje>(['Documentado', 'Descargado']);
 
 /** Estatus que el operador puede poner en un viaje cargado, en orden. */
@@ -136,6 +178,14 @@ export function guia(v: Viaje, reportes: readonly ReporteParaGuia[]): Guia {
     }
   }
   return mejor;
+}
+
+/** Aclaración junto al estatus cuando viene de un reporte que el servidor aún no refleja. */
+export function marcaDeGuia(g: Guia): string | null {
+  if (!g.porReporte) return null;
+  if (g.estadoReporte === 'pendiente') return 'Pendiente de enviar';
+  if (g.estadoReporte === 'por-confirmar') return 'Pendiente de confirmar por oficina';
+  return null;
 }
 
 /** Pasos que todavía se le ofrecen (solo hacia adelante desde el estatus efectivo). El primero es el siguiente lógico. */

@@ -1,13 +1,5 @@
 <section class="panel" aria-label="Reportar">
-  <p class="panel-estatus">
-    Estatus: <strong>{{ ETIQUETA_ESTATUS[guia().estatus] }}</strong>
-    @if (marcaGuia()) {
-      <span class="chip" [class.chip-pendiente]="guia().estadoReporte === 'pendiente'" [class.chip-por-confirmar]="guia().estadoReporte === 'por-confirmar'">{{
-        marcaGuia()
-      }}</span>
-    }
-  </p>
-
+  <!-- El estatus actual lo muestra la pantalla arriba de la ruta (app-etiqueta-estatus). -->
   @if (cerrado()) {
     <p class="alerta alerta-info">Este viaje ya está cerrado.</p>
   } @else {

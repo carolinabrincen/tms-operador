@@ -14,6 +14,7 @@
       <section class="tarjeta tarjeta-destacada" aria-labelledby="titulo-ahora">
         <p class="ahora-etiqueta">{{ v === toca() ? 'Le toca' : 'Esperando a la oficina' }}</p>
         <h2 id="titulo-ahora">Viaje {{ v.orden }} · {{ v.tipo === 'cargado' ? 'Cargado' : 'Vacío' }}</h2>
+        <app-etiqueta-estatus [estatus]="guiaDe(v).estatus" [marca]="marcaDe(v)" />
         <p class="ruta">{{ ruta(v).origen }} → {{ ruta(v).destino }}</p>
         <app-panel-avance [viaje]="v" />
       </section>
@@ -39,10 +40,9 @@
               <h3>Viaje {{ v.orden }} · {{ v.tipo === 'cargado' ? 'Cargado' : 'Vacío' }}</h3>
               @if (v === toca()) {
                 <span class="chip chip-toca">Le toca</span>
-              } @else {
-                <span class="chip" [class.chip-cerrado]="v.estatus === 'Cerrado'">{{ estatusDe(v) }}</span>
               }
             </div>
+            <app-etiqueta-estatus [estatus]="guiaDe(v).estatus" [marca]="marcaDe(v)" tamano="mediano" />
             <p class="ruta">{{ ruta(v).origen }} → {{ ruta(v).destino }}</p>
             <span class="texto-suave">Ver detalle y línea de tiempo ›</span>
           </a>

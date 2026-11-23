@@ -7,15 +7,16 @@ import { ColaReportesService } from '../../core/reportes/cola-reportes.service';
 import { AsignacionService } from '../../core/viaje/asignacion.service';
 import { activarRefrescoDelViaje } from '../../core/viaje/refresco-viaje';
 import { DatosViajeComponent } from '../../shared/ui/datos-viaje.component';
+import { EtiquetaEstatusComponent } from '../../shared/ui/etiqueta-estatus.component';
 import { LineaTiempoComponent } from '../../shared/ui/linea-tiempo.component';
 import { PanelAvanceComponent } from '../../shared/ui/panel-avance.component';
-import { ETIQUETA_ESTATUS, guia, origenDestino, viajeActivo, viajeQueToca, viajesEnOrden } from '../../shared/utils/estatus-viaje.util';
+import { Guia, guia, marcaDeGuia, origenDestino, viajeActivo, viajeQueToca, viajesEnOrden } from '../../shared/utils/estatus-viaje.util';
 import { lineaDeTiempo } from '../../shared/utils/linea-tiempo.util';
 import { cuandoNegocio } from '../../shared/utils/zona-negocio.util';
 
 @Component({
   selector: 'app-mi-viaje',
-  imports: [RouterLink, PanelAvanceComponent, DatosViajeComponent, LineaTiempoComponent],
+  imports: [RouterLink, PanelAvanceComponent, DatosViajeComponent, LineaTiempoComponent, EtiquetaEstatusComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './mi-viaje.page.html',
   styles: `
@@ -43,7 +44,6 @@ export class MiViajePage implements OnInit {
   private readonly conexion = inject(ConexionService);
   private readonly mensajes = inject(MensajesService);
 
-  protected readonly ETIQUETA_ESTATUS = ETIQUETA_ESTATUS;
   protected readonly ruta = origenDestino;
   protected readonly cuando = (iso: string | null) => cuandoNegocio(iso);
 
@@ -69,9 +69,13 @@ export class MiViajePage implements OnInit {
     void this.cola.actualizarEstados();
   }
 
-  /** Estatus que se muestra en la lista (el efectivo: incluye lo que el operador ya reportó). */
-  protected estatusDe(v: Viaje): string {
-    return ETIQUETA_ESTATUS[guia(v, this.cola.reportes()).estatus];
+  /** Estatus efectivo (incluye lo que el operador ya reportó y el servidor aún no refleja). */
+  protected guiaDe(v: Viaje): Guia {
+    return guia(v, this.cola.reportes());
+  }
+
+  protected marcaDe(v: Viaje): string | null {
+    return marcaDeGuia(this.guiaDe(v));
   }
 
   protected async actualizar(): Promise<void> {

@@ -12,6 +12,8 @@ describe('App (armazón)', () => {
     const el = f.nativeElement as HTMLElement;
     expect(el.querySelector('.cabecera-nombre')?.textContent).toContain(MARCA.nombre);
     expect(el.querySelector('.aviso-ejemplo')?.textContent?.trim()).toBe('Datos de ejemplo');
+    // Va en la barra superior, junto al título: no tapa contenido.
+    expect(el.querySelector('.cabecera .cabecera-titulo .aviso-ejemplo')).not.toBeNull();
     expect(el.querySelector('nav.menu')).toBeNull();
   });
 

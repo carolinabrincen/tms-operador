@@ -9,7 +9,9 @@ import {
   esPasoDelOperador,
   guia,
   llegadaVacio,
+  marcaDeGuia,
   operadorTermino,
+  presentacionEstatus,
   pasosDisponibles,
   pasosOperador,
   rango,
@@ -18,6 +20,7 @@ import {
   viajeActivo,
   viajeQueToca,
 } from './estatus-viaje.util';
+import { CONTRASTE_MINIMO_SOL, contraste } from './contraste.util';
 
 const salida = salidaEjemplo(new Date('2026-11-23T16:00:00Z'));
 const [combustible, cargado1, cargado2, regresoTaller] = salida.viajes as [ViajeVacio, ViajeCargado, ViajeCargado, ViajeVacio];
@@ -126,6 +129,34 @@ describe('estatus-viaje.util: estatus del viaje y pasos del operador', () => {
     const cerrada = { ...salida, viajes: salida.viajes.map((v) => ({ ...v, estatus: 'Cerrado' as const })) };
     expect(viajeActivo(cerrada, [])).toBeNull();
     expect(viajeActivo(null, [])).toBeNull();
+  });
+
+  it('presentación del estatus: un solo util da texto y colores, todos con contraste ≥ 7:1 (pleno sol)', () => {
+    const todos = Object.keys(ETIQUETA_ESTATUS) as EstatusViaje[];
+    expect(todos).toHaveLength(13);
+    for (const e of todos) {
+      const p = presentacionEstatus(e);
+      expect(p.texto).toBe(ETIQUETA_ESTATUS[e]);
+      expect(contraste(p.fondo, p.tinta), e).toBeGreaterThanOrEqual(CONTRASTE_MINIMO_SOL);
+    }
+  });
+
+  it('presentación: color por etapa (camino, patio, maniobra, hito, taller, cerrado)', () => {
+    const fondo = (e: EstatusViaje) => presentacionEstatus(e).fondo;
+    expect(new Set(['EnPosicionamiento', 'EnTransito', 'EnTransitoVacio'].map((e) => fondo(e as EstatusViaje))).size).toBe(1);
+    expect(new Set(['EnPatioOrigen', 'EnPatioDestino', 'EnPatio'].map((e) => fondo(e as EstatusViaje))).size).toBe(1);
+    expect(fondo('EnCarga')).toBe(fondo('EnDescarga'));
+    expect(fondo('Documentado')).toBe(fondo('Descargado'));
+    const distintos = new Set(['Asignado', 'EnTransito', 'EnPatio', 'EnCarga', 'Documentado', 'EnTaller', 'Cerrado'].map((e) => fondo(e as EstatusViaje)));
+    expect(distintos.size).toBe(7);
+    expect(presentacionEstatus('EnTransitoVacio')).toEqual({ texto: 'En tránsito (vacío)', fondo: '#7a3400', tinta: '#ffffff' });
+  });
+
+  it('marca junto al estatus solo si viene de un reporte pendiente o por confirmar', () => {
+    expect(marcaDeGuia({ estatus: 'EnCarga', porReporte: false, estadoReporte: null })).toBeNull();
+    expect(marcaDeGuia({ estatus: 'EnCarga', porReporte: true, estadoReporte: 'pendiente' })).toBe('Pendiente de enviar');
+    expect(marcaDeGuia({ estatus: 'Documentado', porReporte: true, estadoReporte: 'por-confirmar' })).toBe('Pendiente de confirmar por oficina');
+    expect(marcaDeGuia({ estatus: 'EnCarga', porReporte: true, estadoReporte: 'enviado' })).toBeNull();
   });
 
   it('nombres para pantalla y título', () => {

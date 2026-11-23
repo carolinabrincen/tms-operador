@@ -44,7 +44,8 @@ describe('PanelAvanceComponent: guía del operador sobre un viaje', () => {
     const { textos, el } = await montar({ ...cargado, estatus: 'EnTransito' });
     expect(textos('.paso-siguiente')).toEqual(['Llegué a descargar']);
     expect(textos('.otros-lista button')).toEqual(['Me están descargando', 'Ya descargué']);
-    expect(el.querySelector('.panel-estatus')!.textContent).toContain('En tránsito');
+    // El renglón chico "Estatus: …" ya no está en el panel: el estatus lo muestra la pantalla, en grande.
+    expect(el.textContent).not.toContain('Estatus:');
   });
 
   it('vacío cuyo último tramo es a Taller: "Salí" y después "Llegué al taller"', async () => {

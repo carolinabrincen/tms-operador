@@ -10,9 +10,26 @@
   background: var(--c-primario);
   color: var(--c-sobre-primario);
 }
+.cabecera-titulo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 6px 0;
+}
 .cabecera-nombre {
   font-weight: 800;
   font-size: 1.1rem;
+}
+/* En la barra superior: no tapa contenido. Amarillo con letra negra sobre el azul: se distingue sin estorbar. */
+.aviso-ejemplo {
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--c-aviso);
+  color: #000;
+  font-size: 0.75rem;
+  font-weight: 800;
+  white-space: nowrap;
 }
 .cabecera-salir {
   color: var(--c-sobre-primario);
@@ -96,20 +113,6 @@
   border: 2px solid #000;
   font-size: 0.8rem;
   line-height: 18px;
-}
-
-.aviso-ejemplo {
-  position: fixed;
-  z-index: 30;
-  left: 8px;
-  bottom: calc(var(--alto-menu) + var(--seguro-abajo) + 8px);
-  padding: 2px 8px;
-  border-radius: 6px;
-  background: rgba(0, 0, 0, 0.72);
-  color: #fff;
-  font-size: 0.75rem;
-  font-weight: 700;
-  pointer-events: none;
 }
 
 .mensaje {
