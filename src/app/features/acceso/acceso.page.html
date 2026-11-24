@@ -28,7 +28,7 @@
     </div>
 
     <div class="campo">
-      <label for="pin">PIN</label>
+      <label for="pin">PIN ({{ PIN_LARGO }} números)</label>
       <div class="campo-con-boton">
         <input
           id="pin"
@@ -62,7 +62,7 @@
 
   @if (esEjemplo) {
     <p class="alerta alerta-info acceso-ejemplo">
-      <strong>Datos de ejemplo:</strong> cualquier celular de 10 dígitos con un PIN de 4 a {{ PIN_MAX }} números entra. Si el
+      <strong>Datos de ejemplo:</strong> cualquier celular de 10 dígitos con un PIN de {{ PIN_LARGO }} números entra. Si el
       celular termina en 0000 verá la pantalla “sin viaje activo”.
     </p>
   }

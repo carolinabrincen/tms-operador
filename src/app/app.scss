@@ -46,6 +46,11 @@
   background: #000;
   color: var(--c-aviso);
 }
+.estado-reloj {
+  background: var(--c-error-fondo);
+  color: #5c0005;
+  border-bottom: 2px solid var(--c-error);
+}
 .estado-pendientes {
   background: var(--c-aviso);
   color: #000;

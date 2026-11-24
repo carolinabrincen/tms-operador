@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { Viaje } from '../../core/api/operador-api.modelos';
+import { textoMotivo } from '../utils/estatus-viaje.util';
 import { cuandoNegocio, fechaHoraNegocio } from '../utils/zona-negocio.util';
 
 const toneladas = new Intl.NumberFormat('es-MX', { maximumFractionDigits: 2 });
@@ -23,7 +24,7 @@ const toneladas = new Intl.NumberFormat('es-MX', { maximumFractionDigits: 2 });
       } @else {
         @for (t of tramos(); track t.orden) {
           <div>
-            <dt>Tramo {{ t.orden }} · {{ t.motivo }}</dt>
+            <dt>Tramo {{ t.orden }} · {{ motivo(t.motivo) }}</dt>
             <dd>{{ t.origen }} → {{ t.destino }}</dd>
           </div>
         }
@@ -39,6 +40,7 @@ export class DatosViajeComponent {
   readonly viaje = input.required<Viaje>();
   protected readonly cuando = (iso: string | null) => cuandoNegocio(iso);
   protected readonly fechaHora = fechaHoraNegocio;
+  protected readonly motivo = textoMotivo;
   protected readonly tons = computed(() => {
     const v = this.viaje();
     return v.tipo === 'cargado' && v.toneladasProgramadas != null ? `${toneladas.format(v.toneladasProgramadas)} t` : 'Sin dato';

@@ -88,6 +88,13 @@ describe('PanelAvanceComponent: guía del operador sobre un viaje', () => {
     expect(cola.reportes()[0].reporte).toMatchObject({ tipo: 'incidencia', incidencia: 'Otro', nota: 'Lluvia fuerte, me orillé' });
   });
 
+  it('viaje cancelado por la oficina: se dice y no ofrece reportes (ni estatus ni incidencia)', async () => {
+    const { el } = await montar({ ...cargado, estatus: 'Cancelado' });
+    expect(el.querySelector('.paso-siguiente')).toBeNull();
+    expect(el.querySelector('button.incidencia')).toBeNull();
+    expect(el.textContent).toContain('La oficina canceló este viaje.');
+  });
+
   it('viaje cerrado: sin botones de pasos ni de incidencia', async () => {
     const { el } = await montar({ ...cargado, estatus: 'Cerrado' });
     expect(el.querySelector('.paso-siguiente')).toBeNull();

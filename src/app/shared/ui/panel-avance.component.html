@@ -1,6 +1,8 @@
 <section class="panel" aria-label="Reportar">
   <!-- El estatus actual lo muestra la pantalla arriba de la ruta (app-etiqueta-estatus). -->
-  @if (cerrado()) {
+  @if (cancelado()) {
+    <p class="alerta alerta-aviso">La oficina canceló este viaje. Ya no se reporta nada en él.</p>
+  } @else if (terminado()) {
     <p class="alerta alerta-info">Este viaje ya está cerrado.</p>
   } @else {
     @if (siguiente(); as s) {

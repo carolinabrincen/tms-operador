@@ -1,6 +1,9 @@
 import { InjectionToken } from '@angular/core';
-import { esReporteLocalValido } from '../../shared/utils/cola-reportes.util';
+import { normalizarReporteLocal } from '../../shared/utils/cola-reportes.util';
+import { TABLA_REPORTES, abrirBaseDatos, comoPromesa, transaccionTerminada } from '../almacen/base-datos';
 import { ReporteLocal } from './reporte-local';
+
+export { NOMBRE_BD, TABLA_REPORTES, VERSION_BD } from '../almacen/base-datos';
 
 /** Dónde vive la cola de reportes en el teléfono. */
 export interface AlmacenReportes {
@@ -9,12 +12,9 @@ export interface AlmacenReportes {
   todos(): Promise<ReporteLocal[]>;
   /** Inserta o reemplaza por id. */
   guardar(reporte: ReporteLocal): Promise<void>;
+  /** Quita un registro (p. ej. al cambiarle el id porque otro operador ya lo usó). */
+  eliminar(id: string): Promise<void>;
 }
-
-export const NOMBRE_BD = 'ct-operador';
-/** 2 = paso 2 (reportes por viaje: estatus e incidencias). Los registros del paso 1 eran solo de ejemplo y se descartan. */
-export const VERSION_BD = 2;
-export const TABLA_REPORTES = 'reportes';
 
 export class AlmacenReportesMemoria implements AlmacenReportes {
   readonly persistente: boolean = false;
@@ -27,13 +27,11 @@ export class AlmacenReportesMemoria implements AlmacenReportes {
   async guardar(reporte: ReporteLocal): Promise<void> {
     this.datos.set(reporte.id, structuredClone(reporte));
   }
-}
 
-const comoPromesa = <T>(req: IDBRequest<T>) =>
-  new Promise<T>((resolver, rechazar) => {
-    req.onsuccess = () => resolver(req.result);
-    req.onerror = () => rechazar(req.error);
-  });
+  async eliminar(id: string): Promise<void> {
+    this.datos.delete(id);
+  }
+}
 
 /**
  * Cola en IndexedDB (sobrevive a cerrar la app y a reiniciar el teléfono). Si IndexedDB no abre, sigue en memoria
@@ -45,7 +43,7 @@ export class AlmacenReportesIndexedDb implements AlmacenReportes {
 
   constructor(
     private readonly idb: IDBFactory,
-    private readonly nombreBd = NOMBRE_BD,
+    private readonly nombreBd?: string,
   ) {}
 
   get persistente(): boolean {
@@ -57,7 +55,8 @@ export class AlmacenReportesIndexedDb implements AlmacenReportes {
     if (!bd) return this.respaldo!.todos();
     const tx = bd.transaction(TABLA_REPORTES, 'readonly');
     const todos = await comoPromesa(tx.objectStore(TABLA_REPORTES).getAll() as IDBRequest<unknown[]>);
-    return todos.filter(esReporteLocalValido);
+    // Registros de versiones anteriores se traducen; los dañados se ignoran.
+    return todos.map(normalizarReporteLocal).filter((r): r is ReporteLocal => !!r);
   }
 
   async guardar(reporte: ReporteLocal): Promise<void> {
@@ -65,35 +64,21 @@ export class AlmacenReportesIndexedDb implements AlmacenReportes {
     if (!bd) return this.respaldo!.guardar(reporte);
     const tx = bd.transaction(TABLA_REPORTES, 'readwrite');
     tx.objectStore(TABLA_REPORTES).put(reporte);
-    // Se espera a que la transacción quede escrita (no solo la petición).
-    await new Promise<void>((resolver, rechazar) => {
-      tx.oncomplete = () => resolver();
-      tx.onerror = () => rechazar(tx.error);
-      tx.onabort = () => rechazar(tx.error);
-    });
+    await transaccionTerminada(tx);
+  }
+
+  async eliminar(id: string): Promise<void> {
+    const bd = await this.abrir();
+    if (!bd) return this.respaldo!.eliminar(id);
+    const tx = bd.transaction(TABLA_REPORTES, 'readwrite');
+    tx.objectStore(TABLA_REPORTES).delete(id);
+    await transaccionTerminada(tx);
   }
 
   private abrir(): Promise<IDBDatabase | null> {
-    this.bd ??= new Promise<IDBDatabase | null>((resolver) => {
-      let req: IDBOpenDBRequest;
-      try {
-        req = this.idb.open(this.nombreBd, VERSION_BD);
-      } catch {
-        this.respaldo = new AlmacenReportesMemoria();
-        resolver(null);
-        return;
-      }
-      req.onupgradeneeded = (ev) => {
-        const bd = req.result;
-        // Versión 1 (paso 1): formato anterior y solo datos de ejemplo; se empieza de cero.
-        if (ev.oldVersion < 2 && bd.objectStoreNames.contains(TABLA_REPORTES)) bd.deleteObjectStore(TABLA_REPORTES);
-        if (!bd.objectStoreNames.contains(TABLA_REPORTES)) bd.createObjectStore(TABLA_REPORTES, { keyPath: 'id' });
-      };
-      req.onsuccess = () => resolver(req.result);
-      req.onerror = () => {
-        this.respaldo = new AlmacenReportesMemoria();
-        resolver(null);
-      };
+    this.bd ??= abrirBaseDatos(this.idb, this.nombreBd).catch(() => {
+      this.respaldo = new AlmacenReportesMemoria();
+      return null;
     });
     return this.bd;
   }

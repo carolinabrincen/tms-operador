@@ -1,8 +1,9 @@
 /**
- * Implementación de EJEMPLO de OperadorApi: todo en memoria, sin red. NO describe la API real (que aún no existe).
+ * Implementación de EJEMPLO de OperadorApi: todo en memoria, sin red. Usa los mismos valores que el contrato M1
+ * (estatus, incidencias, motivos, resultados) pero no simula HTTP, tokens ni renovación.
  *
  * Comportamiento del ejemplo:
- *  - Acceso: cualquier celular de 10 dígitos y PIN numérico válido entra. El PIN no se guarda. Un celular que termine
+ *  - Acceso: cualquier celular de 10 dígitos y PIN de 6 dígitos entra. El PIN no se guarda. Un celular que termine
  *    en 0000 entra sin viaje (para ver esa pantalla).
  *  - Sin conexión (navigator.onLine = false) responde como si no hubiera señal, para poder probar la cola.
  *  - Reportes IDEMPOTENTES por id (reenviar no duplica).
@@ -13,7 +14,7 @@
  *    operador no lo reportó), y `cierreTrasMs` después de Descargado confirmado o de la llegada en vacío cierra el viaje.
  */
 import { mensajeCelular, mensajePin, normalizarCelular, terminacionCelular } from '../../../shared/utils/acceso.util';
-import { ETIQUETA_ESTATUS, esHito, esPasoDelOperador, rango } from '../../../shared/utils/estatus-viaje.util';
+import { esHito, esPasoDelOperador, rango, textoEstatus, viajeTerminado } from '../../../shared/utils/estatus-viaje.util';
 import { esTipoIncidencia } from '../../../shared/utils/incidencias.util';
 import { ahoraIsoUtc, msDeIso } from '../../../shared/utils/zona-negocio.util';
 import { ErrorApiOperador, OperadorApi } from '../operador-api';
@@ -35,8 +36,8 @@ import {
 import { CELULAR_EJEMPLO_SIN_VIAJE, salidaEjemplo } from './datos-ejemplo';
 
 export interface OpcionesEjemplo {
-  /** Token de la sesión actual (como lo mandaría un interceptor HTTP). */
-  token: () => string | null;
+  /** Operador con sesión en el teléfono (hace las veces del token). */
+  operadorId: () => string | null;
   enLinea: () => boolean;
   ahora: () => Date;
   latenciaMs: number;
@@ -48,7 +49,7 @@ export interface OpcionesEjemplo {
   cierreTrasMs: number;
 }
 
-const PREFIJO_TOKEN = 'ejemplo';
+const PREFIJO_OPERADOR = 'ej-op-';
 
 interface Recibido {
   reporte: ReporteOperador;
@@ -79,7 +80,7 @@ export class OperadorApiEjemplo implements OperadorApi {
 
   constructor(opciones: Partial<OpcionesEjemplo> = {}) {
     this.opciones = {
-      token: () => null,
+      operadorId: () => null,
       enLinea: () => globalThis.navigator?.onLine ?? true,
       ahora: () => new Date(),
       latenciaMs: 350,
@@ -99,16 +100,18 @@ export class OperadorApiEjemplo implements OperadorApi {
     await this.red();
     if (mensajeCelular(celular) || mensajePin(pin)) throw new ErrorApiOperador('sesion', 'Celular o PIN incorrectos.');
     const numero = normalizarCelular(celular);
-    const operadorId = `ej-op-${numero}`;
-    const sinViaje = CELULAR_EJEMPLO_SIN_VIAJE.test(numero) ? '1' : '0';
     // El PIN se usó solo para validar; no se guarda en ningún lado.
-    return {
-      operadorId,
-      nombre: 'Operador de ejemplo',
-      celularTerminacion: terminacionCelular(numero),
-      token: `${PREFIJO_TOKEN}.${operadorId}.${sinViaje}`,
-    };
+    return { operadorId: `${PREFIJO_OPERADOR}${numero}`, nombre: 'Operador de ejemplo', celularTerminacion: terminacionCelular(numero) };
   }
+
+  /** En el ejemplo no hay tokens: renovar funciona mientras haya operador con sesión. */
+  async renovarSesion(): Promise<void> {
+    await this.red();
+    this.sesion();
+  }
+
+  /** En el ejemplo no hay credenciales que borrar. */
+  async cerrarSesion(): Promise<void> {}
 
   async obtenerAsignacion(): Promise<AsignacionOperador> {
     await this.red();
@@ -142,7 +145,7 @@ export class OperadorApiEjemplo implements OperadorApi {
     return ids
       .map((id) => this.recibidos.get(id))
       .filter((r): r is Recibido => !!r && r.operadorId === sesion.operadorId)
-      .map((r) => ({ id: r.reporte.id, resultado: r.resultado, confirmadoEn: r.confirmadoEn }));
+      .map((r) => ({ id: r.reporte.id, resultado: r.resultado, confirmadoEn: r.confirmadoEn, mensaje: r.resultado === 'confirmado' ? null : r.mensaje }));
   }
 
   // ------------------------------------------------------------------ reglas del ejemplo
@@ -156,7 +159,7 @@ export class OperadorApiEjemplo implements OperadorApi {
       return {
         ...base,
         resultado: 'sin-efecto',
-        mensaje: `El viaje ya estaba en «${ETIQUETA_ESTATUS[viaje.estatus]}». Su reporte quedó registrado sin cambiar el estatus.`,
+        mensaje: `La oficina ya registró ${textoEstatus(viaje.estatus)}; el estatus no cambió.`,
       };
     }
     if (esHito(r.estatus)) {
@@ -169,7 +172,7 @@ export class OperadorApiEjemplo implements OperadorApi {
         this.poner(viaje, r.estatus, r.ocurrioEn, 'operador', r.id, true);
         if (r.estatus === 'Descargado') this.programarCierre(estado, viaje, en);
       });
-      return { ...base, resultado: 'por-confirmar', mensaje: null };
+      return { ...base, resultado: 'por-confirmar', mensaje: 'Recibido; la oficina lo confirma.' };
     }
     this.poner(viaje, r.estatus, r.ocurrioEn, 'operador', r.id, false);
     if (r.estatus === 'EnCarga') {
@@ -188,7 +191,7 @@ export class OperadorApiEjemplo implements OperadorApi {
   private recibirIncidencia(viaje: Viaje, r: ReporteIncidencia, operadorId: string): Recibido {
     if (!esTipoIncidencia(r.incidencia)) throw new ErrorApiOperador('rechazado', 'Tipo de incidencia desconocido.');
     if (r.incidencia === 'Otro' && !r.nota?.trim()) throw new ErrorApiOperador('rechazado', 'En “Otro” la nota es obligatoria.');
-    if (viaje.estatus === 'Cerrado') throw new ErrorApiOperador('rechazado', 'El viaje ya está cerrado.');
+    if (viajeTerminado(viaje)) throw new ErrorApiOperador('rechazado', 'El viaje ya está cerrado.');
     this.insertar(viaje, { tipo: 'incidencia', incidencia: r.incidencia, nota: r.nota, ocurrioEn: r.ocurrioEn, autor: 'operador', reporteId: r.id });
     return { reporte: structuredClone(r), operadorId, recibidoEn: this.iso(), resultado: 'registrado', mensaje: null, confirmadoEn: null };
   }
@@ -201,7 +204,7 @@ export class OperadorApiEjemplo implements OperadorApi {
   private poner(viaje: Viaje, e: EstatusViaje, ocurrioEn: string, autor: Autor, reporteId: string | null, aunqueNoAvance: boolean): void {
     const avanza = rango(viaje.tipo, e) > rango(viaje.tipo, viaje.estatus);
     if (avanza) (viaje as { estatus: EstatusViaje }).estatus = e;
-    if (avanza || aunqueNoAvance) this.insertar(viaje, { tipo: 'estatus', estatus: e, ocurrioEn, autor, reporteId });
+    if (avanza || aunqueNoAvance) this.insertar(viaje, { tipo: 'estatus', estatus: e, nota: null, ocurrioEn, autor, reporteId });
   }
 
   private insertar(viaje: Viaje, evento: EventoViaje): void {
@@ -249,10 +252,8 @@ export class OperadorApiEjemplo implements OperadorApi {
   }
 
   private sesion(): { operadorId: string; sinViaje: boolean } {
-    const partes = (this.opciones.token() ?? '').split('.');
-    if (partes.length !== 3 || partes[0] !== PREFIJO_TOKEN || !partes[1]) {
-      throw new ErrorApiOperador('sesion', 'Su sesión terminó. Entre de nuevo.');
-    }
-    return { operadorId: partes[1], sinViaje: partes[2] === '1' };
+    const operadorId = this.opciones.operadorId();
+    if (!operadorId?.startsWith(PREFIJO_OPERADOR)) throw new ErrorApiOperador('sesion', 'Su sesión terminó. Entre de nuevo.');
+    return { operadorId, sinViaje: CELULAR_EJEMPLO_SIN_VIAJE.test(operadorId) };
   }
 }

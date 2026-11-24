@@ -19,15 +19,15 @@ describe('acceso.util: celular a 10 dígitos y PIN numérico', () => {
     expect(mensajeCelular('81abc45678')).toBe('El celular solo lleva números.');
   });
 
-  it('PIN: solo números, de 4 a 8', () => {
-    expect(mensajePin('1234')).toBeNull();
-    expect(mensajePin('12345678')).toBeNull();
+  it('PIN: exactamente 6 números (contrato M1)', () => {
+    expect(mensajePin('482915')).toBeNull();
     expect(mensajePin('')).toBe('Escriba su PIN.');
     expect(mensajePin(undefined)).toBe('Escriba su PIN.');
-    expect(mensajePin('12a4')).toBe('El PIN solo lleva números.');
-    expect(mensajePin('12 34')).toBe('El PIN solo lleva números.');
-    expect(mensajePin('123')).toBe('El PIN tiene de 4 a 8 números.');
-    expect(mensajePin('123456789')).toBe('El PIN tiene de 4 a 8 números.');
+    expect(mensajePin('12a456')).toBe('El PIN solo lleva números.');
+    expect(mensajePin('123 45')).toBe('El PIN solo lleva números.');
+    expect(mensajePin('1234')).toBe('El PIN tiene 6 números (lleva 4).');
+    expect(mensajePin('12345')).toBe('El PIN tiene 6 números (lleva 5).');
+    expect(mensajePin('1234567')).toBe('El PIN tiene 6 números (lleva 7).');
   });
 
   it('terminación del celular para mostrar', () => {

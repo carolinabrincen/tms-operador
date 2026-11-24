@@ -3,7 +3,8 @@
 App del operador (chofer): ve su viaje en el celular, reporta el avance (estatus) y las incidencias. Web instalable
 (PWA); el mismo código se podrá empaquetar después para las tiendas.
 
-> **Paso 2: todo corre con datos de ejemplo.** Aún no hay contrato de API para el operador.
+> **Paso 3:** ya existe la implementación de la API real (contrato M1, `docs/contrato-app-operador-m1.md`), pero la app
+> **sigue arrancando con datos de ejemplo** hasta que se decida lo contrario (`fuenteDatos` en `src/environments`).
 
 ## Requisitos
 
@@ -15,7 +16,8 @@ App del operador (chofer): ve su viaje en el celular, reporta el avance (estatus
 | Qué | Comando |
 | --- | --- |
 | Instalar | `npm ci` |
-| Desarrollo (puerto 4300) | `npm start` → http://localhost:4300 |
+| Desarrollo con datos de ejemplo (puerto 4300) | `npm start` → http://localhost:4300 |
+| Desarrollo contra la API real local | `npm run start:api` → http://localhost:4300, API en https://localhost:58120/api |
 | Pruebas (una vez) | `npm run test:ci` (`ng test --watch=false`) |
 | Build de producción | `npm run build` (`ng build`) |
 | Aplicar la marca | `npm run marca` |
@@ -26,11 +28,26 @@ abre como `c:\...`, vitest carga dos veces su propio módulo y falla con "Vitest
 El service worker solo se activa en el build de producción. Para probar la PWA en un celular hace falta HTTPS: el
 service worker, la ubicación y `crypto.randomUUID` no funcionan en `http://` salvo en `localhost`.
 
+## API real (contrato M1)
+
+- Implementación: `core/api/http/operador-api-http.ts`. Se elige con `environment.fuenteDatos` (`'ejemplo'` o `'api'`).
+- `npm run start:api` usa `environment.api-local.ts`. El servidor debe tener `http://localhost:4300` en
+  `Cors:OrigenesOperador` y el navegador debe confiar en el certificado de desarrollo de .NET
+  (`dotnet dev-certs https --trust`).
+- Sesión: PIN de 6 dígitos. Token y refresh se guardan en IndexedDB (nunca en pantalla, consola ni errores). Ante un 401
+  se renueva una vez y se repite; si renovar falla, se pide el PIN y la cola de reportes se conserva. Al salir se
+  borran token y refresh. La renovación va de una en una (también entre pestañas, con Web Locks), porque el refresh
+  es rotativo y reusar uno cierra todas las sesiones del operador.
+- Errores del reporte (tabla 3.2): 400, 404 y 409 → "No aceptado"; 409 `DESPACHO_EVENTO_CLAVE_DUPLICADA` → otro id y
+  se reenvía; 401 sin poder renovar y 403 → pedir el PIN; 429, 503 y 5xx → se reintenta.
+- La hora del reporte es la del teléfono: si va adelantada (el servidor rechaza más de 10 minutos), la app avisa desde
+  los 5 minutos comparando con la hora del servidor de cada acuse.
+
 ## Estatus del viaje
 
 | Viaje | Estatus, en orden (los mismos nombres que oficina) |
 | --- | --- |
-| Cargado | Asignado → EnPosicionamiento → EnPatioOrigen → EnCarga → **Documentado** → EnTransito → EnPatioDestino → EnDescarga → **Descargado** → Cerrado |
+| Cargado | Asignado → EnPosicionamiento → EnPatioOrigen → EnCarga → **Documentado** → EnTransito → EnPatioDestino → EnDescarga → **Descargado** → Cerrado (o **Cancelado** por la oficina: se muestra y no admite reportes) |
 | Vacío | Asignado → EnTransitoVacio → EnPatio (o EnTaller si el último tramo es a Taller) → Cerrado |
 
 - El operador solo avanza hacia adelante y puede saltar intermedios. Asignado y Cerrado los pone la oficina.
@@ -39,12 +56,15 @@ service worker, la ubicación y `crypto.randomUUID` no funcionan en `http://` sa
 - La oficina puede avanzar el viaje sin esperar al operador. La app guía desde el estatus más avanzado que conoce (el
   del servidor o lo que el operador ya reportó) y deja de ofrecer los pasos anteriores.
 - Las incidencias (Detenido en parador, Falla mecánica, Retén o inspección, Desvío de ruta, Otro) no cambian el estatus.
-  En "Otro" la nota es obligatoria.
+  En "Otro" la nota es obligatoria. Viajan con los valores del backend (`DetenidoEnParador`, `IncidenciaMecanica`,
+  `RetenOInspeccion`, `DesvioDeRuta`, `Otro`); igual los motivos de tramo (`CargaCombustible` → "Carga de combustible").
+- Estados del reporte: Pendiente de enviar, Enviado, Pendiente de confirmar por oficina, Confirmado, Descartado por
+  oficina (con su motivo) y No aceptado. El `mensaje` del servidor se muestra tal cual.
 - Los textos de los botones están en `shared/utils/estatus-viaje.util.ts` (`BOTON_ESTATUS`).
 
 ## Datos de ejemplo
 
-- Cualquier celular de 10 dígitos con un PIN de 4 a 8 números entra. Si el celular termina en `0000`, entra sin viaje.
+- Cualquier celular de 10 dígitos con un PIN de 6 números entra. Si el celular termina en `0000`, entra sin viaje.
 - Una salida con 4 viajes: vacío a cargar combustible, dos cargados, y un regreso vacío cuyo último tramo va al taller.
 - La "oficina" de ejemplo:
   - confirma los hitos 20 s después de recibirlos;
@@ -71,6 +91,9 @@ src/
     core/
       api/                        OperadorApi (interfaz única), modelos y provideOperadorApi()
         ejemplo/                  implementación en memoria, simulación de la oficina y datos de ejemplo
+        http/                     implementación real (contrato M1): traducción y errores en *.util.ts
+      almacen/                    base IndexedDB (cola de reportes y credenciales)
+      reloj/                      aviso de hora del teléfono mal puesta
       sesion/                     almacén de sesión (sin PIN), entrar/salir, guards
       viaje/                      asignación (salida y viajes, con copia para ver sin señal) y refresco
       reportes/                   cola de reportes en IndexedDB
@@ -87,13 +110,10 @@ src/
 scripts/marca.mjs                 aplica la marca e iconos
 ```
 
-## Cuando llegue el contrato de la API
+## Para publicar contra la API real
 
-1. Crear `OperadorApiHttp` que implemente `OperadorApi` (`core/api/operador-api.ts`) usando `environment.apiUrl`, y
-   traducir las respuestas a los modelos de `operador-api.modelos.ts`. Rechazar siempre con `ErrorApiOperador` para que
-   la cola sepa si reintentar.
-2. Elegirla en `provideOperadorApi()` cuando `fuenteDatos` sea `'api'`.
-3. El servidor debe ser idempotente por `id` de reporte: reenviar el mismo id no debe duplicar.
+1. En `src/environments/environment.ts`: `fuenteDatos: 'api'` y `apiUrl` con la URL pública de TMS.WebAPI (con `/api`).
+2. Agregar el origen de la app publicada a `Cors:OrigenesOperador` en el servidor.
 
 ## Reglas que no cambian
 

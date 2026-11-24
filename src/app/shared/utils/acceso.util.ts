@@ -1,7 +1,9 @@
 /** Validación del acceso del operador: celular (10 dígitos) y PIN numérico que asigna la oficina. PURO. */
 
-export const PIN_MIN = 4;
-export const PIN_MAX = 8;
+/** Contrato M1 (P2 a): el PIN tiene exactamente 6 dígitos. */
+export const PIN_LARGO = 6;
+/** Para el atributo maxlength del campo. */
+export const PIN_MAX = PIN_LARGO;
 
 /**
  * Deja solo los dígitos del celular. Acepta espacios, guiones, paréntesis y la lada de país (+52 / 52 / 521) que a
@@ -28,7 +30,7 @@ export function mensajePin(pin: string | null | undefined): string | null {
   const p = pin ?? '';
   if (!p) return 'Escriba su PIN.';
   if (!/^\d+$/.test(p)) return 'El PIN solo lleva números.';
-  if (p.length < PIN_MIN || p.length > PIN_MAX) return `El PIN tiene de ${PIN_MIN} a ${PIN_MAX} números.`;
+  if (p.length !== PIN_LARGO) return `El PIN tiene ${PIN_LARGO} números (lleva ${p.length}).`;
   return null;
 }
 

@@ -4,7 +4,7 @@ import { ConexionService } from '../../core/conexion/conexion.service';
 import { MensajesService } from '../../core/mensajes/mensajes.service';
 import { ColaReportesService, NuevoReporte } from '../../core/reportes/cola-reportes.service';
 import { UbicacionService } from '../../core/ubicacion/ubicacion.service';
-import { ETIQUETA_ESTATUS, esHito, guia, pasosDisponibles, pasosOperador, rango, textoBoton, tituloViaje } from '../utils/estatus-viaje.util';
+import { ETIQUETA_ESTATUS, esHito, guia, pasosDisponibles, pasosOperador, rango, textoBoton, tituloViaje, viajeTerminado } from '../utils/estatus-viaje.util';
 import { ETIQUETA_INCIDENCIA, INCIDENCIAS, LARGO_NOTA, mensajeIncidencia } from '../utils/incidencias.util';
 import { ESPERA_GPS_MS, EXPLICACION_UBICACION, EstadoPermisoUbicacion, textoUbicacionEnReporte } from '../utils/ubicacion.util';
 import { TEXTO_ZONA_NEGOCIO, ahoraIsoUtc, fechaHoraNegocio } from '../utils/zona-negocio.util';
@@ -49,7 +49,9 @@ export class PanelAvanceComponent {
   protected readonly pasos = computed(() => pasosDisponibles(this.viaje(), this.cola.reportes()));
   protected readonly siguiente = computed(() => this.pasos()[0] ?? null);
   protected readonly otros = computed(() => this.pasos().slice(1));
-  protected readonly cerrado = computed(() => this.viaje().estatus === 'Cerrado');
+  /** Cerrado o cancelado: no se ofrecen reportes (ni de estatus ni de incidencia). */
+  protected readonly terminado = computed(() => viajeTerminado(this.viaje()));
+  protected readonly cancelado = computed(() => this.viaje().estatus === 'Cancelado');
   /** Último paso que reportó (para "Ya reportó …"). */
   protected readonly ultimoPaso = computed(() => {
     const v = this.viaje();

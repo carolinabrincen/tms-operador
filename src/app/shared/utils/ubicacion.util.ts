@@ -54,18 +54,21 @@ interface PosicionMinima {
   timestamp?: number;
 }
 
-/** Posición del navegador → PuntoGps (lat/lng a 6 decimales ≈ 10 cm; precisión en metros enteros). Inválida = null. */
+/**
+ * Posición del navegador → PuntoGps, con los redondeos del servidor (contrato M1): lat/lng a 7 decimales y precisión
+ * en metros con 1 decimal (0 a 9,999,999.9). Inválida = null (el reporte se envía sin ubicación).
+ */
 export function puntoDePosicion(pos: PosicionMinima | null | undefined, ahora: Date = new Date()): PuntoGps | null {
   const lat = pos?.coords?.latitude;
   const lng = pos?.coords?.longitude;
   if (typeof lat !== 'number' || typeof lng !== 'number' || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
   if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
   const precision = pos!.coords.accuracy;
-  const redondear = (n: number) => Math.round(n * 1e6) / 1e6;
+  const redondear = (n: number) => Math.round(n * 1e7) / 1e7;
   return {
     lat: redondear(lat),
     lng: redondear(lng),
-    precisionM: typeof precision === 'number' && Number.isFinite(precision) ? Math.round(precision) : null,
+    precisionM: typeof precision === 'number' && Number.isFinite(precision) && precision >= 0 ? Math.min(Math.round(precision * 10) / 10, 9_999_999.9) : null,
     tomadoEn: ahoraIsoUtc(pos!.timestamp ? new Date(pos!.timestamp) : ahora),
   };
 }

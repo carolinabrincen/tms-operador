@@ -31,9 +31,12 @@ describe('ubicacion.util: permiso y punto GPS del reporte', () => {
     expect(textoUbicacionEnReporte('concedido')).toContain('Se registrará su ubicación');
   });
 
-  it('posición → punto con 6 decimales y precisión entera', () => {
-    const p = puntoDePosicion({ coords: { latitude: 25.68661234, longitude: -100.31611234, accuracy: 12.7 }, timestamp: Date.UTC(2026, 10, 23, 16, 0, 5) });
-    expect(p).toEqual({ lat: 25.686612, lng: -100.316112, precisionM: 13, tomadoEn: '2026-11-23T16:00:05Z' });
+  it('posición → punto con los redondeos del servidor: 7 decimales y precisión con 1 decimal (contrato M1)', () => {
+    const p = puntoDePosicion({ coords: { latitude: 25.68661234, longitude: -100.31611236, accuracy: 12.74 }, timestamp: Date.UTC(2026, 10, 23, 16, 0, 5) });
+    expect(p).toEqual({ lat: 25.6866123, lng: -100.3161124, precisionM: 12.7, tomadoEn: '2026-11-23T16:00:05Z' });
+    // Precisión fuera de rango: se acota; negativa no sirve.
+    expect(puntoDePosicion({ coords: { latitude: 1, longitude: 2, accuracy: 12_345_678 } })!.precisionM).toBe(9_999_999.9);
+    expect(puntoDePosicion({ coords: { latitude: 1, longitude: 2, accuracy: -3 } })!.precisionM).toBeNull();
   });
 
   it('sin precisión o sin hora del GPS usa null y la hora actual', () => {

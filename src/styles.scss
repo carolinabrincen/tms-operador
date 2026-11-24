@@ -260,6 +260,11 @@ a {
   color: #fff;
   border-color: var(--c-exito);
 }
+.chip-descartado {
+  background: var(--c-superficie);
+  color: #5c0005;
+  border-color: #5c0005;
+}
 .chip-rechazado {
   background: var(--c-error);
   color: #fff;

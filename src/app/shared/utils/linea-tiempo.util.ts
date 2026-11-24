@@ -1,12 +1,14 @@
 /**
  * Línea de tiempo de un viaje: estatus e incidencias ya ocurridos, con su hora y quién los puso. PURO.
  *
- * Junta lo que dice el servidor (historial) con lo que el operador reportó y el servidor aún no refleja (pendiente de
- * enviar, o hito por confirmar). No muestra rechazados ni reportes de estatus recibidos sin efecto.
+ * Junta lo que dice el servidor (historial: ya viene sin eventos anulados ni reportes descartados) con lo que el
+ * operador reportó y el servidor aún no refleja (pendiente de enviar, o por confirmar). No muestra rechazados,
+ * descartados ni reportes de estatus recibidos sin efecto.
  */
 import { Autor, Viaje } from '../../core/api/operador-api.modelos';
-import { ETIQUETA_ESTATUS, ReporteParaGuia } from './estatus-viaje.util';
-import { ETIQUETA_INCIDENCIA } from './incidencias.util';
+import { cuentaComoHecho } from './cola-reportes.util';
+import { ReporteParaGuia, textoEstatus } from './estatus-viaje.util';
+import { textoIncidencia } from './incidencias.util';
 
 export interface EntradaLinea {
   clave: string;
@@ -33,8 +35,8 @@ export function lineaDeTiempo(v: Viaje, reportes: readonly ReporteParaGuia[]): E
     clave: e.reporteId ?? `servidor-${i}`,
     ocurrioEn: e.ocurrioEn,
     tipo: e.tipo,
-    texto: e.tipo === 'estatus' ? ETIQUETA_ESTATUS[e.estatus] : `Incidencia: ${ETIQUETA_INCIDENCIA[e.incidencia]}`,
-    nota: e.tipo === 'incidencia' ? e.nota : null,
+    texto: e.tipo === 'estatus' ? textoEstatus(e.estatus) : `Incidencia: ${textoIncidencia(e.incidencia)}`,
+    nota: e.nota,
     autor: e.autor,
     marca: null,
   }));
@@ -42,14 +44,13 @@ export function lineaDeTiempo(v: Viaje, reportes: readonly ReporteParaGuia[]): E
 
   for (const r of reportes) {
     const rep = r.reporte;
-    if (rep.viajeId !== v.id || yaEnServidor.has(rep.id)) continue;
-    if (r.estado === 'rechazado' || (rep.tipo === 'estatus' && r.aviso)) continue;
+    if (rep.viajeId !== v.id || yaEnServidor.has(rep.id) || !cuentaComoHecho(r)) continue;
     // Un intermedio "enviado" ya se aplicó en el servidor; si el historial aún no lo trae es porque falta actualizar.
     entradas.push({
       clave: rep.id,
       ocurrioEn: rep.ocurrioEn,
       tipo: rep.tipo,
-      texto: rep.tipo === 'estatus' ? ETIQUETA_ESTATUS[rep.estatus] : `Incidencia: ${ETIQUETA_INCIDENCIA[rep.incidencia]}`,
+      texto: rep.tipo === 'estatus' ? textoEstatus(rep.estatus) : `Incidencia: ${textoIncidencia(rep.incidencia)}`,
       nota: rep.nota,
       autor: 'operador',
       marca: MARCA_LOCAL[r.estado] ?? null,

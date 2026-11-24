@@ -35,7 +35,7 @@ const UNIDAD: Unidad = {
  */
 export function salidaEjemplo(ahora: Date): Salida {
   const asignadoEn = ahoraIsoUtc(new Date(ahora.getTime() - 60 * 60 * 1000));
-  const asignado = () => [{ tipo: 'estatus' as const, estatus: 'Asignado' as const, ocurrioEn: asignadoEn, autor: 'oficina' as const, reporteId: null }];
+  const asignado = () => [{ tipo: 'estatus' as const, estatus: 'Asignado' as const, nota: null, ocurrioEn: asignadoEn, autor: 'oficina' as const, reporteId: null }];
   return {
     id: 'ej-sal-418',
     folio: 'SAL-2026-00418',
@@ -50,7 +50,7 @@ export function salidaEjemplo(ahora: Date): Salida {
         estatus: 'Asignado',
         notas: 'Cargar tanque lleno antes de ir a la planta.',
         historial: asignado(),
-        tramos: [{ orden: 1, motivo: 'Carga de combustible', origen: 'Patio Guadalupe, N.L.', destino: 'Estación de diésel, Carr. Miguel Alemán km 12' }],
+        tramos: [{ orden: 1, motivo: 'CargaCombustible', origen: 'Patio Guadalupe, N.L.', destino: 'Estación de diésel, Carr. Miguel Alemán km 12' }],
       },
       {
         tipo: 'cargado',

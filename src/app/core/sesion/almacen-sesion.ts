@@ -26,7 +26,6 @@ export class AlmacenSesion {
       operadorId: s.operadorId,
       nombre: s.nombre,
       celularTerminacion: s.celularTerminacion,
-      token: s.token,
     };
     this.almacen.setItem(CLAVE_SESION, JSON.stringify(limpia));
     this.avisoSig.set(null);
@@ -47,12 +46,12 @@ export class AlmacenSesion {
   private leer(): SesionOperador | null {
     try {
       const s = JSON.parse(this.almacen.getItem(CLAVE_SESION) ?? 'null') as Partial<SesionOperador> | null;
-      if (!s || typeof s.operadorId !== 'string' || typeof s.token !== 'string' || !s.operadorId || !s.token) return null;
+      // Un perfil del paso 1 o 2 traía también un token: se ignora (ya no se guarda aquí).
+      if (!s || typeof s.operadorId !== 'string' || !s.operadorId) return null;
       return {
         operadorId: s.operadorId,
         nombre: typeof s.nombre === 'string' ? s.nombre : '',
         celularTerminacion: typeof s.celularTerminacion === 'string' ? s.celularTerminacion : '',
-        token: s.token,
       };
     } catch {
       return null;

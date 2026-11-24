@@ -1,17 +1,20 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
-import { OPERADOR_API, comoErrorApi } from '../../core/api/operador-api';
+import { OPERADOR_API, TipoErrorApi, comoErrorApi } from '../../core/api/operador-api';
 import { MARCA } from '../../core/config/marca';
 import { MensajesService } from '../../core/mensajes/mensajes.service';
 import { AlmacenSesion } from '../../core/sesion/almacen-sesion';
 import { SesionService } from '../../core/sesion/sesion.service';
-import { PIN_MAX, mensajeCelular, mensajePin } from '../../shared/utils/acceso.util';
+import { PIN_LARGO, PIN_MAX, mensajeCelular, mensajePin } from '../../shared/utils/acceso.util';
 
-const MENSAJE_ERROR: Record<string, string> = {
+/** Mensaje por tipo de error al entrar (contrato M1: 401 credenciales, 429 demasiados intentos). */
+const MENSAJE_ERROR: Record<TipoErrorApi, string> = {
   sesion: 'Celular o PIN incorrectos. Revise y vuelva a intentar. Si no tiene PIN, pídalo a la oficina.',
+  limite: 'Demasiados intentos. Por seguridad, espere 15 minutos y vuelva a intentar.',
   'sin-conexion': 'Sin conexión. Para entrar necesita señal de internet.',
   servidor: 'La oficina no responde en este momento. Intente de nuevo en un rato.',
   rechazado: 'No se pudo entrar. Llame a la oficina.',
+  'id-duplicado': 'No se pudo entrar. Llame a la oficina.',
 };
 
 @Component({
@@ -36,6 +39,7 @@ export class AccesoPage {
   protected readonly aviso = inject(AlmacenSesion).aviso;
   protected readonly esEjemplo = inject(OPERADOR_API).esEjemplo;
   protected readonly PIN_MAX = PIN_MAX;
+  protected readonly PIN_LARGO = PIN_LARGO;
 
   protected readonly celular = signal('');
   /** El PIN vive solo en esta señal mientras se escribe; se borra al intentar entrar. */

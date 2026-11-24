@@ -1,8 +1,8 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { ReporteLocal } from '../../core/reportes/reporte-local';
 import { ETIQUETA_ESTADO_REPORTE } from '../utils/cola-reportes.util';
-import { ETIQUETA_ESTATUS, textoBoton } from '../utils/estatus-viaje.util';
-import { ETIQUETA_INCIDENCIA } from '../utils/incidencias.util';
+import { textoBoton, textoEstatus } from '../utils/estatus-viaje.util';
+import { textoIncidencia } from '../utils/incidencias.util';
 import { cuandoNegocio, fechaHoraNegocio } from '../utils/zona-negocio.util';
 
 /** Un reporte con su estado: pendiente de enviar, enviado, pendiente de confirmar, confirmado o no aceptado. */
@@ -29,8 +29,8 @@ import { cuandoNegocio, fechaHoraNegocio } from '../utils/zona-negocio.util';
       @if (r.reporte.nota) {
         <p class="reporte-nota">“{{ r.reporte.nota }}”</p>
       }
-      @if (r.aviso) {
-        <p class="alerta alerta-aviso reporte-aviso">{{ r.aviso }}</p>
+      @if (r.mensaje) {
+        <p class="alerta reporte-aviso" [class.alerta-aviso]="avisoFuerte()" [class.alerta-info]="!avisoFuerte()">{{ r.mensaje }}</p>
       }
       @if (r.estado === 'pendiente' && r.error) {
         <p class="reporte-linea texto-suave">Último intento: {{ r.error }}</p>
@@ -66,13 +66,15 @@ export class ReporteItemComponent {
   /** Lo que el operador tocó: "Me están cargando" o "Incidencia: Falla mecánica". */
   protected readonly titulo = computed(() => {
     const r = this.reporte().reporte;
-    return r.tipo === 'estatus' ? textoBoton(r.estatus) : `Incidencia: ${ETIQUETA_INCIDENCIA[r.incidencia]}`;
+    return r.tipo === 'estatus' ? textoBoton(r.estatus) : `Incidencia: ${textoIncidencia(r.incidencia)}`;
   });
   /** Para estatus: a qué estatus lleva ("Estatus: Cargando"). */
   protected readonly detalle = computed(() => {
     const r = this.reporte().reporte;
-    return r.tipo === 'estatus' ? `Estatus: ${ETIQUETA_ESTATUS[r.estatus]}` : null;
+    return r.tipo === 'estatus' ? `Estatus: ${textoEstatus(r.estatus)}` : null;
   });
+  /** Sin efecto o descartado: el mensaje es un aviso (no contó). Si no, es informativo ("Recibido; la oficina lo confirma."). */
+  protected readonly avisoFuerte = computed(() => this.reporte().estado === 'descartado' || this.reporte().resultado === 'sin-efecto');
   protected readonly etiquetaEstado = computed(() => ETIQUETA_ESTADO_REPORTE[this.reporte().estado]);
   protected readonly cuando = computed(() => cuandoNegocio(this.reporte().reporte.ocurrioEn));
   protected readonly fechaCompleta = computed(() => fechaHoraNegocio(this.reporte().reporte.ocurrioEn));

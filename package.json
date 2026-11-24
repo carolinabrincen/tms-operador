@@ -5,6 +5,7 @@
     "ng": "ng",
     "marca": "node scripts/marca.mjs",
     "start": "node scripts/marca.mjs && ng serve",
+    "start:api": "node scripts/marca.mjs && ng serve --configuration api-local",
     "build": "node scripts/marca.mjs && ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",

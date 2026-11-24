@@ -54,6 +54,8 @@ export type NavegadorMinimo = Pick<Navigator, 'onLine'> & {
   geolocation?: Pick<Geolocation, 'getCurrentPosition'>;
   permissions?: Pick<Permissions, 'query'>;
   storage?: Partial<Pick<StorageManager, 'persist' | 'persisted'>>;
+  /** Web Locks: serializa la renovación de la sesión entre pestañas (el refresh es rotativo). */
+  locks?: Pick<LockManager, 'request'>;
 };
 
 export const NAVEGADOR = new InjectionToken<NavegadorMinimo>('NAVEGADOR', {

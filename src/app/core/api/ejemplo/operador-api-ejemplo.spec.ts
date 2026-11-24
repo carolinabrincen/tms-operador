@@ -8,11 +8,11 @@ const VACIO_PATIO = 'ej-via-770';
 const VACIO_TALLER = 'ej-via-773';
 
 function crear(extra: Partial<OpcionesEjemplo> = {}) {
-  let token: string | null = null;
+  let operadorId: string | null = null;
   let enLinea = true;
   let ahora = new Date('2026-11-23T16:00:00Z');
   const api = new OperadorApiEjemplo({
-    token: () => token,
+    operadorId: () => operadorId,
     enLinea: () => enLinea,
     ahora: () => ahora,
     latenciaMs: 0,
@@ -23,7 +23,8 @@ function crear(extra: Partial<OpcionesEjemplo> = {}) {
   });
   const c = {
     api,
-    entrar: async (celular = '8112345678') => (token = (await api.iniciarSesion(celular, '1234')).token),
+    entrar: async (celular = '8112345678') => (operadorId = (await api.iniciarSesion(celular, '123456')).operadorId),
+    salir: () => (operadorId = null),
     setEnLinea: (v: boolean) => (enLinea = v),
     avanzar: (ms: number) => (ahora = new Date(ahora.getTime() + ms)),
     viaje: async (id: string): Promise<Viaje> => (await api.obtenerAsignacion()).salida!.viajes.find((v) => v.id === id)!,
@@ -36,7 +37,7 @@ function estatus(viajeId: string, e: EstatusViaje, id = `r${++n}`): ReporteEstat
   return { tipo: 'estatus', id, viajeId, estatus: e, ocurrioEn: '2026-11-23T16:00:00Z', ubicacion: null, nota: null };
 }
 function incidencia(viajeId: string, extra: Partial<ReporteIncidencia> = {}): ReporteIncidencia {
-  return { tipo: 'incidencia', id: `i${++n}`, viajeId, incidencia: 'FallaMecanica', ocurrioEn: '2026-11-23T16:00:00Z', ubicacion: null, nota: null, ...extra };
+  return { tipo: 'incidencia', id: `i${++n}`, viajeId, incidencia: 'IncidenciaMecanica', ocurrioEn: '2026-11-23T16:00:00Z', ubicacion: null, nota: null, ...extra };
 }
 
 async function errorDe(p: Promise<unknown>): Promise<ErrorApiOperador> {
@@ -60,15 +61,16 @@ describe('OperadorApiEjemplo: implementación en memoria', () => {
     expect(crear().api.esEjemplo).toBe(true);
   });
 
-  it('acceso: cualquier celular de 10 dígitos y PIN numérico entra; el resultado no trae el PIN', async () => {
-    const s = await crear().api.iniciarSesion('+52 81 1234 5678', '4321');
-    expect(s).toEqual({ operadorId: 'ej-op-8112345678', nombre: 'Operador de ejemplo', celularTerminacion: '5678', token: 'ejemplo.ej-op-8112345678.0' });
-    expect(JSON.stringify(s)).not.toContain('4321');
+  it('acceso: cualquier celular de 10 dígitos y PIN de 6 dígitos entra; devuelve solo el perfil (sin PIN ni token)', async () => {
+    const s = await crear().api.iniciarSesion('+52 81 1234 5678', '482915');
+    expect(s).toEqual({ operadorId: 'ej-op-8112345678', nombre: 'Operador de ejemplo', celularTerminacion: '5678' });
+    expect(JSON.stringify(s)).not.toContain('482915');
   });
 
   it('acceso inválido = error de sesión', async () => {
     const { api } = crear();
-    expect((await errorDe(api.iniciarSesion('81123', '1234'))).tipo).toBe('sesion');
+    expect((await errorDe(api.iniciarSesion('81123', '123456'))).tipo).toBe('sesion');
+    expect((await errorDe(api.iniciarSesion('8112345678', '1234'))).tipo).toBe('sesion');
     expect((await errorDe(api.iniciarSesion('8112345678', 'abcd'))).tipo).toBe('sesion');
   });
 
@@ -78,7 +80,7 @@ describe('OperadorApiEjemplo: implementación en memoria', () => {
     await c.entrar();
     const { salida } = await c.api.obtenerAsignacion();
     expect(salida!.viajes.map((v) => `${v.orden}:${v.tipo}:${v.estatus}`)).toEqual(['1:vacio:Asignado', '2:cargado:Asignado', '3:cargado:Asignado', '4:vacio:Asignado']);
-    expect(salida!.viajes[0].historial).toEqual([{ tipo: 'estatus', estatus: 'Asignado', ocurrioEn: '2026-11-23T15:00:00Z', autor: 'oficina', reporteId: null }]);
+    expect(salida!.viajes[0].historial).toEqual([{ tipo: 'estatus', estatus: 'Asignado', nota: null, ocurrioEn: '2026-11-23T15:00:00Z', autor: 'oficina', reporteId: null }]);
   });
 
   it('celular terminado en 0000: sin salida', async () => {
@@ -100,18 +102,18 @@ describe('OperadorApiEjemplo: implementación en memoria', () => {
     expect(await c.api.enviarReporte(r)).toMatchObject({ resultado: 'aplicado', mensaje: null });
     const v = await c.viaje(CARGADO);
     expect(v.estatus).toBe('EnPatioOrigen');
-    expect(v.historial.at(-1)).toEqual({ tipo: 'estatus', estatus: 'EnPatioOrigen', ocurrioEn: r.ocurrioEn, autor: 'operador', reporteId: r.id });
+    expect(v.historial.at(-1)).toEqual({ tipo: 'estatus', estatus: 'EnPatioOrigen', nota: null, ocurrioEn: r.ocurrioEn, autor: 'operador', reporteId: r.id });
   });
 
   it('hito: queda por confirmar y la oficina lo confirma después de un rato', async () => {
     const c = crear();
     await c.entrar();
     const r = estatus(CARGADO, 'Documentado');
-    expect((await c.api.enviarReporte(r)).resultado).toBe('por-confirmar');
+    expect(await c.api.enviarReporte(r)).toMatchObject({ resultado: 'por-confirmar', mensaje: 'Recibido; la oficina lo confirma.' });
     expect((await c.viaje(CARGADO)).estatus).toBe('Asignado');
-    expect(await c.api.consultarReportes([r.id])).toEqual([{ id: r.id, resultado: 'por-confirmar', confirmadoEn: null }]);
+    expect(await c.api.consultarReportes([r.id])).toEqual([{ id: r.id, resultado: 'por-confirmar', confirmadoEn: null, mensaje: 'Recibido; la oficina lo confirma.' }]);
     c.avanzar(20_000);
-    expect(await c.api.consultarReportes([r.id])).toEqual([{ id: r.id, resultado: 'confirmado', confirmadoEn: '2026-11-23T16:00:20Z' }]);
+    expect(await c.api.consultarReportes([r.id])).toEqual([{ id: r.id, resultado: 'confirmado', confirmadoEn: '2026-11-23T16:00:20Z', mensaje: null }]);
     expect((await c.viaje(CARGADO)).estatus).toBe('Documentado');
   });
 
@@ -145,7 +147,7 @@ describe('OperadorApiEjemplo: implementación en memoria', () => {
     c.avanzar(30_000); // oficina → Documentado
     const atrasado = await c.api.enviarReporte(estatus(CARGADO, 'EnPatioOrigen'));
     expect(atrasado.resultado).toBe('sin-efecto');
-    expect(atrasado.mensaje).toBe('El viaje ya estaba en «Documentado». Su reporte quedó registrado sin cambiar el estatus.');
+    expect(atrasado.mensaje).toBe('La oficina ya registró Documentado; el estatus no cambió.');
     expect((await c.viaje(CARGADO)).estatus).toBe('Documentado');
   });
 
@@ -194,11 +196,11 @@ describe('OperadorApiEjemplo: implementación en memoria', () => {
   it('incidencia: se registra en el historial y NO cambia el estatus; en "Otro" la nota es obligatoria', async () => {
     const c = crear();
     await c.entrar();
-    const i = incidencia(CARGADO, { incidencia: 'RetenInspeccion', nota: 'Revisión' });
+    const i = incidencia(CARGADO, { incidencia: 'RetenOInspeccion', nota: 'Revisión' });
     expect((await c.api.enviarReporte(i)).resultado).toBe('registrado');
     const v = await c.viaje(CARGADO);
     expect(v.estatus).toBe('Asignado');
-    expect(v.historial.at(-1)).toEqual({ tipo: 'incidencia', incidencia: 'RetenInspeccion', nota: 'Revisión', ocurrioEn: i.ocurrioEn, autor: 'operador', reporteId: i.id });
+    expect(v.historial.at(-1)).toEqual({ tipo: 'incidencia', incidencia: 'RetenOInspeccion', nota: 'Revisión', ocurrioEn: i.ocurrioEn, autor: 'operador', reporteId: i.id });
     expect((await errorDe(c.api.enviarReporte(incidencia(CARGADO, { incidencia: 'Otro', nota: ' ' })))).tipo).toBe('rechazado');
     expect((await c.api.enviarReporte(incidencia(CARGADO, { incidencia: 'Otro', nota: 'Lluvia' }))).resultado).toBe('registrado');
   });
@@ -230,6 +232,14 @@ describe('OperadorApiEjemplo: implementación en memoria', () => {
     c.setEnLinea(false);
     expect((await errorDe(c.api.enviarReporte(estatus(CARGADO, 'EnCarga')))).tipo).toBe('sin-conexion');
     expect(c.api.totalRecibidos).toBe(0);
+  });
+
+  it('renovar: funciona con operador en sesión; sin él, error de sesión. Cerrar sesión no falla', async () => {
+    const c = crear();
+    expect((await errorDe(c.api.renovarSesion())).tipo).toBe('sesion');
+    await c.entrar();
+    await expect(c.api.renovarSesion()).resolves.toBeUndefined();
+    await expect(c.api.cerrarSesion()).resolves.toBeUndefined();
   });
 
   it('cada operador tiene su propia salida y sus reportes', async () => {

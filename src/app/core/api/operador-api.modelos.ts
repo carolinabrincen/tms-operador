@@ -1,29 +1,34 @@
 /**
- * Modelos de la app del operador (lado app). NO son el contrato de la API real, que aún no existe: cuando llegue, su
- * implementación de OperadorApi traducirá lo que mande el servidor a estas formas.
+ * Modelos de la app del operador. Siguen el contrato M1 (docs/contrato-app-operador-m1.md): la implementación real
+ * (OperadorApiHttp) traduce lo que manda el servidor a estas formas y la de ejemplo las produce igual.
  *
  * REGLA: el operador NUNCA ve tarifas, ingresos, costos, utilidad ni pagos. Esos campos no existen aquí y no deben
- * agregarse (la prueba de operador-api-ejemplo.spec.ts lo verifica sobre los datos de ejemplo).
+ * agregarse (las pruebas lo verifican sobre los datos de ejemplo y sobre la traducción de la API real).
  */
 
 /** Fecha-hora ISO 8601 en UTC ("2026-11-23T20:05:00Z"). En pantalla se muestra con la hora del negocio. */
 export type IsoUtc = string;
 
+/**
+ * Perfil del operador con sesión (se guarda en el teléfono para mostrar su nombre y filtrar su cola).
+ * NO lleva el token ni el refresh: esos los guarda la implementación de la API aparte (IndexedDB) y nunca salen de ahí.
+ * El PIN no se guarda en ningún lado.
+ */
 export interface SesionOperador {
   operadorId: string;
   nombre: string;
   /** Últimos 4 dígitos del celular, solo para mostrar ("•••• 4321"). */
   celularTerminacion: string;
-  /** Token que entregue el servidor. En el ejemplo es un texto falso. El PIN nunca se guarda. */
-  token: string;
 }
 
 export interface Unidad {
   /** Número económico de la unidad ("T-104"). */
   numeroEconomico: string;
+  /** Las de la motriz; "" si no tiene. */
   placas: string;
-  /** Configuración vehicular ("T3-S2 · Tractocamión con semirremolque"). */
+  /** Etiqueta y composición del conjunto ("Sencillo 1 · Sencillo") o el tipo de la motriz. Se muestra tal cual. */
   configuracion: string;
+  /** Números económicos de los arrastres (y dolly), en orden de posición. */
   remolques: string[];
 }
 
@@ -41,9 +46,10 @@ export const ESTATUS_CARGADO = [
   'Descargado',
   'Cerrado',
 ] as const;
-export type EstatusCargado = (typeof ESTATUS_CARGADO)[number];
+/** Además de la secuencia, la oficina puede cancelar un viaje dentro de una salida activa (contrato M1). */
+export type EstatusCargado = (typeof ESTATUS_CARGADO)[number] | 'Cancelado';
 
-/** EnPatio y EnTaller son alternativas del mismo paso (llegada). */
+/** EnPatio y EnTaller son alternativas del mismo paso (llegada). Cerrado solo lo usa el ejemplo. */
 export const ESTATUS_VACIO = ['Asignado', 'EnTransitoVacio', 'EnPatio', 'EnTaller', 'Cerrado'] as const;
 export type EstatusVacio = (typeof ESTATUS_VACIO)[number];
 
@@ -52,15 +58,17 @@ export type EstatusViaje = EstatusCargado | EstatusVacio;
 /** Quién puso un estatus. */
 export type Autor = 'operador' | 'oficina';
 
-export const MOTIVOS_TRAMO_VACIO = ['Posicionamiento', 'Carga de combustible', 'Taller', 'Otro'] as const;
+/** Valores del backend; en pantalla se traducen (ETIQUETA_MOTIVO). */
+export const MOTIVOS_TRAMO_VACIO = ['Posicionamiento', 'CargaCombustible', 'Taller', 'Otro'] as const;
 export type MotivoTramoVacio = (typeof MOTIVOS_TRAMO_VACIO)[number];
 
-export const TIPOS_INCIDENCIA = ['DetenidoParador', 'FallaMecanica', 'RetenInspeccion', 'DesvioRuta', 'Otro'] as const;
+/** Valores del backend (P10 a); en pantalla se traducen (ETIQUETA_INCIDENCIA). */
+export const TIPOS_INCIDENCIA = ['DetenidoEnParador', 'IncidenciaMecanica', 'RetenOInspeccion', 'DesvioDeRuta', 'Otro'] as const;
 export type TipoIncidencia = (typeof TIPOS_INCIDENCIA)[number];
 
 /** Lo ya ocurrido en un viaje, según el servidor. */
 export type EventoViaje =
-  | { tipo: 'estatus'; estatus: EstatusViaje; ocurrioEn: IsoUtc; autor: Autor; reporteId: string | null }
+  | { tipo: 'estatus'; estatus: EstatusViaje; nota: string | null; ocurrioEn: IsoUtc; autor: Autor; reporteId: string | null }
   | { tipo: 'incidencia'; incidencia: TipoIncidencia; nota: string | null; ocurrioEn: IsoUtc; autor: Autor; reporteId: string | null };
 
 interface ViajeBase {
@@ -93,6 +101,7 @@ export interface TramoVacio {
   destino: string;
 }
 
+/** Movimiento en vacío. En la API real su `id` es el id de la salida (los reportes van con ese id). */
 export interface ViajeVacio extends ViajeBase {
   tipo: 'vacio';
   estatus: EstatusVacio;
@@ -113,7 +122,7 @@ export interface Salida {
 
 /** Lo que el operador tiene asignado ahora. Solo lo suyo. */
 export interface AsignacionOperador {
-  /** null = no tiene salida asignada. */
+  /** null = no tiene salida activa (no hay "próximas", P9 a). */
   salida: Salida | null;
 }
 
@@ -122,7 +131,7 @@ export interface AsignacionOperador {
 export interface PuntoGps {
   lat: number;
   lng: number;
-  /** Precisión en metros que informó el teléfono. */
+  /** Precisión en metros que informó el teléfono (el servidor la guarda con 1 decimal). */
   precisionM: number | null;
   tomadoEn: IsoUtc;
 }
@@ -130,11 +139,13 @@ export interface PuntoGps {
 interface ReporteBase {
   /** Lo genera el teléfono: reenviar el mismo id NO debe duplicar el reporte. */
   id: string;
+  /** Un viaje de su salida, o el id de la salida si es un vacío. */
   viajeId: string;
-  /** Cuándo ocurrió (hora del teléfono al reportar, en UTC). */
+  /** Cuándo ocurrió (hora del teléfono al reportar, en UTC). No más de 10 minutos en el futuro. */
   ocurrioEn: IsoUtc;
   /** null = sin permiso o sin señal de GPS. El reporte se envía igual. */
   ubicacion: PuntoGps | null;
+  /** Hasta 500 caracteres. */
   nota: string | null;
 }
 
@@ -144,7 +155,7 @@ export interface ReporteEstatus extends ReporteBase {
   estatus: EstatusViaje;
 }
 
-/** Incidencia en el camino. No cambia el estatus del viaje. */
+/** Incidencia en el camino. No cambia el estatus del viaje. En "Otro" la nota es obligatoria. */
 export interface ReporteIncidencia extends ReporteBase {
   tipo: 'incidencia';
   incidencia: TipoIncidencia;
@@ -153,21 +164,23 @@ export interface ReporteIncidencia extends ReporteBase {
 export type ReporteOperador = ReporteEstatus | ReporteIncidencia;
 
 /**
- * Qué hizo el servidor con un reporte:
+ * Qué hizo el servidor con un reporte (contrato M1, tabla 3.1):
  *  - aplicado: estatus intermedio aplicado al momento.
- *  - por-confirmar: hito (Documentado, Descargado) que espera a la oficina.
- *  - confirmado: la oficina confirmó el hito.
+ *  - por-confirmar: hito (Documentado, Descargado), o intermedio que saltaría un hito: espera a la oficina.
+ *  - confirmado: la oficina capturó ese hito.
  *  - registrado: incidencia guardada.
- *  - sin-efecto: recibido, pero el viaje ya iba igual o más adelante (p. ej. la oficina avanzó); el estatus no cambió.
+ *  - sin-efecto: recibido sin cambiar el estatus (la oficina ya iba igual o más adelante, viaje cancelado, salida
+ *    cerrada) o la oficina lo anuló después de aplicarlo. `mensaje` explica cuál.
+ *  - descartado: la oficina descartó el reporte (P11 a). `mensaje` trae el motivo.
  */
-export type ResultadoReporte = 'aplicado' | 'por-confirmar' | 'confirmado' | 'registrado' | 'sin-efecto';
+export type ResultadoReporte = 'aplicado' | 'por-confirmar' | 'confirmado' | 'registrado' | 'sin-efecto' | 'descartado';
 
 /** Respuesta al recibir un reporte (también al recibirlo repetido). */
 export interface AcuseReporte {
   id: string;
   recibidoEn: IsoUtc;
   resultado: ResultadoReporte;
-  /** Explicación para el operador (sobre todo en sin-efecto). */
+  /** Explicación para el operador ("Recibido; la oficina lo confirma.", motivo de anulación o descarte…). */
   mensaje: string | null;
 }
 
@@ -175,5 +188,7 @@ export interface AcuseReporte {
 export interface EstadoRemotoReporte {
   id: string;
   resultado: ResultadoReporte;
+  /** Solo con `confirmado`. */
   confirmadoEn: IsoUtc | null;
+  mensaje: string | null;
 }

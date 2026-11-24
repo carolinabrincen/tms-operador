@@ -3,21 +3,26 @@ import {
   conEnvioExitoso,
   conEstadoRemoto,
   conFallaEnvio,
+  conNuevoId,
   crearReporteLocal,
   ordenarRecientes,
-  porConfirmar,
+  porConsultar,
   porEnviar,
   retrasoReintentoMs,
 } from '../../shared/utils/cola-reportes.util';
 import { generarIdReporte } from '../../shared/utils/id-reporte.util';
 import { ahoraIsoUtc } from '../../shared/utils/zona-negocio.util';
-import { OPERADOR_API, comoErrorApi } from '../api/operador-api';
+import { CODIGO_HORA_INVALIDA, OPERADOR_API, comoErrorApi } from '../api/operador-api';
 import { ReporteEstatus, ReporteIncidencia } from '../api/operador-api.modelos';
 import { ConexionService } from '../conexion/conexion.service';
 import { NAVEGADOR, RELOJ } from '../plataforma';
+import { RelojTelefonoService } from '../reloj/reloj-telefono.service';
 import { AlmacenSesion, MENSAJE_SESION_VENCIDA } from '../sesion/almacen-sesion';
 import { ALMACEN_REPORTES } from './almacen-reportes';
 import { ReporteLocal } from './reporte-local';
+
+/** Cuántas veces se le cambia el id a un reporte por 409 de id duplicado antes de darlo por no aceptado. */
+const MAX_CAMBIOS_DE_ID = 3;
 
 /** Un reporte por registrar: todo menos el id (lo pone la cola) y el texto para mostrarlo en la lista. */
 export type NuevoReporte = (Omit<ReporteEstatus, 'id'> | Omit<ReporteIncidencia, 'id'>) & { resumen: string };
@@ -29,6 +34,10 @@ export type NuevoReporte = (Omit<ReporteEstatus, 'id'> | Omit<ReporteIncidencia,
  *  3. y después se intenta enviar. Si no hay señal se queda pendiente y se reintenta solo: al recuperar la conexión,
  *     al volver a la app y con espera creciente si el servidor falla.
  * Reenviar el mismo id no duplica (la API es idempotente por id).
+ *
+ * Errores (contrato M1, tabla 3.2): 400/404/409 → "No aceptado" (no se reintenta); 409 de id duplicado → se genera
+ * otro id y se reenvía; 401 que no se pudo renovar y 403 → pedir el PIN (la cola se conserva); 429, 503 y 5xx →
+ * reintentar más tarde.
  */
 @Injectable({ providedIn: 'root' })
 export class ColaReportesService {
@@ -38,6 +47,7 @@ export class ColaReportesService {
   private readonly conexion = inject(ConexionService);
   private readonly navegador = inject(NAVEGADOR);
   private readonly reloj = inject(RELOJ);
+  private readonly relojTelefono = inject(RelojTelefonoService);
 
   private readonly todosSig = signal<ReporteLocal[]>([]);
   private readonly enviandoSig = signal(false);
@@ -122,12 +132,15 @@ export class ColaReportesService {
     return this.corriendo;
   }
 
-  /** Pregunta al servidor si la oficina ya confirmó los hitos enviados. Sin conexión no hace nada. */
+  /**
+   * Pregunta al servidor el estado de lo enviado: la oficina confirma hitos, pero también puede anular un estatus ya
+   * aplicado ("sin efecto") o descartar un reporte. Sin conexión no hace nada.
+   */
   async actualizarEstados(): Promise<void> {
     await this.cargaInicial;
     const operadorId = this.sesion.operadorId();
     if (!operadorId || !this.conexion.enLinea()) return;
-    const esperando = porConfirmar(this.todosSig(), operadorId);
+    const esperando = porConsultar(this.todosSig(), operadorId);
     if (!esperando.length) return;
     try {
       const remotos = await this.api.consultarReportes(esperando.map((r) => r.id));
@@ -167,13 +180,22 @@ export class ColaReportesService {
       if (this.sesion.operadorId() !== operadorId) return; // cambió la sesión a medio camino
       try {
         const acuse = await this.api.enviarReporte(r.reporte);
+        this.relojTelefono.registrarHoraServidor(acuse.recibidoEn);
         await this.guardarYPoner(conEnvioExitoso(r, acuse, ahoraIsoUtc(this.reloj())));
         this.enviadosSig.update((n) => n + 1);
       } catch (e) {
         const error = comoErrorApi(e);
-        const actualizado = conFallaEnvio(r, error.tipo, error.message, ahoraIsoUtc(this.reloj()));
+        if (error.tipo === 'id-duplicado' && r.intentos < MAX_CAMBIOS_DE_ID) {
+          // Ese id ya lo usó otro operador: el mismo reporte con otro id, y se vuelve a enviar en esta misma vuelta.
+          await this.cambiarId(r);
+          this.repetir = true;
+          return;
+        }
+        if (error.codigo === CODIGO_HORA_INVALIDA) this.relojTelefono.registrarHoraRechazada();
+        const tipo = error.tipo === 'id-duplicado' ? 'rechazado' : error.tipo; // tras varios cambios de id, ya no se insiste
+        const actualizado = conFallaEnvio(r, tipo, error.message, ahoraIsoUtc(this.reloj()));
         await this.guardarYPoner(actualizado);
-        if (error.tipo === 'rechazado') continue; // no detiene a los demás
+        if (tipo === 'rechazado') continue; // no detiene a los demás
         if (error.tipo === 'sesion') {
           this.sesion.vencer(MENSAJE_SESION_VENCIDA);
           return;
@@ -182,6 +204,14 @@ export class ColaReportesService {
         return;
       }
     }
+  }
+
+  /** Reemplaza el registro por uno igual con otro id (409 DESPACHO_EVENTO_CLAVE_DUPLICADA). */
+  private async cambiarId(r: ReporteLocal): Promise<void> {
+    const nuevo = { ...conNuevoId(r, generarIdReporte()), intentos: r.intentos + 1 };
+    await this.almacen.guardar(nuevo); // primero el nuevo, para no quedarse sin ninguno
+    await this.almacen.eliminar(r.id);
+    this.todosSig.update((lista) => [...lista.filter((x) => x.id !== r.id), nuevo]);
   }
 
   private agendarReintento(intentos: number): void {

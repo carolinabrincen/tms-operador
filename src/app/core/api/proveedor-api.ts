@@ -2,22 +2,22 @@ import { EnvironmentProviders, inject, makeEnvironmentProviders } from '@angular
 import { environment } from '../../../environments/environment';
 import { AlmacenSesion } from '../sesion/almacen-sesion';
 import { OperadorApiEjemplo } from './ejemplo/operador-api-ejemplo';
+import { OperadorApiHttp } from './http/operador-api-http';
 import { OPERADOR_API, OperadorApi } from './operador-api';
 
 /**
- * Elige la implementación de OperadorApi según environment.fuenteDatos.
- * Cuando llegue el contrato: crear OperadorApiHttp (usa environment.apiUrl) y devolverla aquí para 'api'.
+ * Elige la implementación de OperadorApi según environment.fuenteDatos:
+ *  - 'ejemplo' (por omisión): en memoria.
+ *  - 'api': la API real (contrato M1) en environment.apiUrl. En desarrollo: `npm run start:api`.
  */
-export function provideOperadorApi(): EnvironmentProviders {
+export function provideOperadorApi(fuente: 'ejemplo' | 'api' = environment.fuenteDatos): EnvironmentProviders {
   return makeEnvironmentProviders([
     {
       provide: OPERADOR_API,
       useFactory: (): OperadorApi => {
-        if (environment.fuenteDatos === 'ejemplo') {
-          const almacen = inject(AlmacenSesion);
-          return new OperadorApiEjemplo({ token: () => almacen.sesion()?.token ?? null });
-        }
-        throw new Error('La implementación real de la API del operador aún no existe: use fuenteDatos = "ejemplo".');
+        if (fuente === 'api') return new OperadorApiHttp();
+        const almacen = inject(AlmacenSesion);
+        return new OperadorApiEjemplo({ operadorId: () => almacen.operadorId() });
       },
     },
   ]);

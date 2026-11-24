@@ -38,7 +38,7 @@ export function configurar(e: EntornoPruebas, extra: (Provider | EnvironmentProv
         useFactory: () => {
           const sesion = inject(AlmacenSesion);
           return new OperadorApiEjemplo({
-            token: () => sesion.sesion()?.token ?? null,
+            operadorId: () => sesion.operadorId(),
             enLinea: () => e.navegador.onLine,
             ahora: () => e.reloj.ahora,
             latenciaMs: 0,
@@ -56,7 +56,7 @@ export function configurar(e: EntornoPruebas, extra: (Provider | EnvironmentProv
 /** Entra como operador de ejemplo (sin pasar por la pantalla). */
 export async function entrarComo(celular = '8112345678'): Promise<void> {
   const api = TestBed.inject(OPERADOR_API);
-  TestBed.inject(AlmacenSesion).guardar(await api.iniciarSesion(celular, '1234'));
+  TestBed.inject(AlmacenSesion).guardar(await api.iniciarSesion(celular, '123456'));
 }
 
 /** Simula que el teléfono pierde o recupera la señal (actualiza navigator.onLine y dispara el evento). */

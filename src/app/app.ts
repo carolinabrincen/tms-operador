@@ -5,6 +5,7 @@ import { OPERADOR_API } from './core/api/operador-api';
 import { MARCA } from './core/config/marca';
 import { ConexionService } from './core/conexion/conexion.service';
 import { MensajesService } from './core/mensajes/mensajes.service';
+import { RelojTelefonoService } from './core/reloj/reloj-telefono.service';
 import { ColaReportesService } from './core/reportes/cola-reportes.service';
 import { AlmacenSesion } from './core/sesion/almacen-sesion';
 import { SesionService } from './core/sesion/sesion.service';
@@ -27,6 +28,8 @@ export class App {
   protected readonly mensajes = inject(MensajesService);
   protected readonly esEjemplo = inject(OPERADOR_API).esEjemplo;
   protected readonly confirmandoSalida = signal(false);
+  /** Hora del teléfono mal puesta: el servidor rechaza reportes con más de 10 minutos en el futuro. */
+  protected readonly avisoReloj = inject(RelojTelefonoService).aviso;
   protected readonly textoPendientes = textoPendientes;
 
   constructor() {

@@ -25,6 +25,10 @@
   </div>
 }
 
+@if (avisoReloj()) {
+  <p class="estado-linea estado-reloj" role="alert">{{ avisoReloj() }}</p>
+}
+
 <router-outlet />
 
 @if (sesion()) {

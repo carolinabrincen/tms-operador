@@ -1,12 +1,12 @@
 import { salidaEjemplo } from '../../core/api/ejemplo/datos-ejemplo';
-import { ReporteOperador, ViajeCargado } from '../../core/api/operador-api.modelos';
+import { ReporteOperador, ResultadoReporte, ViajeCargado } from '../../core/api/operador-api.modelos';
 import { ReporteParaGuia } from './estatus-viaje.util';
 import { QUIEN, lineaDeTiempo } from './linea-tiempo.util';
 
 const viaje = salidaEjemplo(new Date('2026-11-23T16:00:00Z')).viajes[1] as ViajeCargado;
 
-function local(reporte: ReporteOperador, estado: string, aviso: string | null = null): ReporteParaGuia {
-  return { reporte, estado, aviso };
+function local(reporte: ReporteOperador, estado: string, resultado: ResultadoReporte | null = null): ReporteParaGuia {
+  return { reporte, estado, resultado };
 }
 
 describe('linea-tiempo.util: lo ocurrido en el viaje, con hora y quién', () => {
@@ -14,10 +14,10 @@ describe('linea-tiempo.util: lo ocurrido en el viaje, con hora y quién', () => 
     ...viaje,
     estatus: 'EnPatioOrigen',
     historial: [
-      { tipo: 'estatus', estatus: 'Asignado', ocurrioEn: '2026-11-23T15:00:00Z', autor: 'oficina', reporteId: null },
-      { tipo: 'estatus', estatus: 'EnPosicionamiento', ocurrioEn: '2026-11-23T15:10:00Z', autor: 'operador', reporteId: 'a' },
-      { tipo: 'incidencia', incidencia: 'RetenInspeccion', nota: 'Revisión de Guardia Nacional', ocurrioEn: '2026-11-23T15:20:00Z', autor: 'operador', reporteId: 'b' },
-      { tipo: 'estatus', estatus: 'EnPatioOrigen', ocurrioEn: '2026-11-23T15:40:00Z', autor: 'operador', reporteId: 'c' },
+      { tipo: 'estatus', estatus: 'Asignado', nota: null, ocurrioEn: '2026-11-23T15:00:00Z', autor: 'oficina', reporteId: null },
+      { tipo: 'estatus', estatus: 'EnPosicionamiento', nota: null, ocurrioEn: '2026-11-23T15:10:00Z', autor: 'operador', reporteId: 'a' },
+      { tipo: 'incidencia', incidencia: 'RetenOInspeccion', nota: 'Revisión de Guardia Nacional', ocurrioEn: '2026-11-23T15:20:00Z', autor: 'operador', reporteId: 'b' },
+      { tipo: 'estatus', estatus: 'EnPatioOrigen', nota: null, ocurrioEn: '2026-11-23T15:40:00Z', autor: 'operador', reporteId: 'c' },
     ],
   };
 
@@ -46,11 +46,12 @@ describe('linea-tiempo.util: lo ocurrido en el viaje, con hora y quién', () => 
     expect(l).toHaveLength(7);
   });
 
-  it('no muestra rechazados, estatus sin efecto ni reportes de otro viaje', () => {
+  it('no muestra rechazados, descartados, estatus sin efecto ni reportes de otro viaje', () => {
     const base = { viajeId: viaje.id, ocurrioEn: '2026-11-23T16:00:00Z', ubicacion: null, nota: null };
     const l = lineaDeTiempo(conHistorial, [
       local({ ...base, tipo: 'estatus', id: 'x1', estatus: 'EnCarga' }, 'rechazado'),
-      local({ ...base, tipo: 'estatus', id: 'x2', estatus: 'EnCarga' }, 'enviado', 'Ya estaba más adelante'),
+      local({ ...base, tipo: 'estatus', id: 'x2', estatus: 'EnCarga' }, 'enviado', 'sin-efecto'),
+      local({ ...base, tipo: 'estatus', id: 'x4', estatus: 'EnCarga' }, 'descartado', 'descartado'),
       local({ ...base, tipo: 'estatus', id: 'x3', estatus: 'EnCarga', viajeId: 'otro' }, 'pendiente'),
     ]);
     expect(l).toHaveLength(4);

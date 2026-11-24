@@ -35,7 +35,7 @@
       @if (viajes().length > 1) {
         <h2>Viajes de esta salida</h2>
         @for (v of viajes(); track v.id) {
-          <a class="tarjeta viaje-enlace" [class.tarjeta-apagada]="v.estatus === 'Cerrado'" [routerLink]="['/viaje', v.id]">
+          <a class="tarjeta viaje-enlace" [class.tarjeta-apagada]="v.estatus === 'Cerrado' || v.estatus === 'Cancelado'" [routerLink]="['/viaje', v.id]">
             <div class="tarjeta-cabeza">
               <h3>Viaje {{ v.orden }} · {{ v.tipo === 'cargado' ? 'Cargado' : 'Vacío' }}</h3>
               @if (v === toca()) {
@@ -54,7 +54,7 @@
         <dl class="datos">
           <div>
             <dt>Unidad</dt>
-            <dd>{{ s.unidad.numeroEconomico }} · Placas {{ s.unidad.placas }}</dd>
+            <dd>{{ s.unidad.numeroEconomico }} · {{ s.unidad.placas ? 'Placas ' + s.unidad.placas : 'Sin placas' }}</dd>
           </div>
           <div>
             <dt>Configuración</dt>

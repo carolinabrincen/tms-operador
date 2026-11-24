@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { OperadorApiEjemplo } from '../api/ejemplo/operador-api-ejemplo';
-import { ErrorApiOperador, OPERADOR_API } from '../api/operador-api';
+import { CODIGO_HORA_INVALIDA, ErrorApiOperador, OPERADOR_API } from '../api/operador-api';
+import { RelojTelefonoService } from '../reloj/reloj-telefono.service';
 import { AlmacenSesion, MENSAJE_SESION_VENCIDA } from '../sesion/almacen-sesion';
 import { EstatusViaje } from '../api/operador-api.modelos';
 import { FORMATO_UUID_V4 } from '../../shared/utils/id-reporte.util';
@@ -171,18 +172,18 @@ describe('ColaReportesService: guardar primero, enviar después, reintentar sin 
     const r = await cola.registrar({
       tipo: 'incidencia',
       viajeId: 'ej-via-771',
-      incidencia: 'DetenidoParador',
+      incidencia: 'DetenidoEnParador',
       ocurrioEn: '2026-11-23T16:00:00Z',
       ubicacion: null,
       nota: null,
       resumen: 'Viaje 2',
     });
     await cola.inactivo();
-    expect(r.reporte).toMatchObject({ tipo: 'incidencia', incidencia: 'DetenidoParador' });
+    expect(r.reporte).toMatchObject({ tipo: 'incidencia', incidencia: 'DetenidoEnParador' });
     expect(cola.reportes()[0].estado).toBe('enviado');
   });
 
-  it('paso que la oficina ya rebasó: "Enviado" con aviso (sin efecto)', async () => {
+  it('paso que la oficina ya rebasó: "Enviado" sin efecto, con el mensaje del servidor', async () => {
     await cola.registrar(nuevo('EnCarga'));
     await cola.inactivo();
     e.reloj.ahora = new Date('2026-11-23T16:00:30Z'); // la oficina pone Documentado por su cuenta
@@ -191,6 +192,66 @@ describe('ColaReportesService: guardar primero, enviar después, reintentar sin 
     ponerEnLinea(e, true);
     await vi.waitFor(() => expect(cola.pendientes()).toBe(0));
     const atrasado = cola.reportes().find((r) => r.reporte.tipo === 'estatus' && r.reporte.estatus === 'EnPatioOrigen')!;
-    expect(atrasado).toMatchObject({ estado: 'enviado', aviso: expect.stringContaining('«Documentado»') });
+    expect(atrasado).toMatchObject({ estado: 'enviado', resultado: 'sin-efecto', mensaje: 'La oficina ya registró Documentado; el estatus no cambió.' });
+  });
+
+  it('409 de id duplicado: el mismo reporte con otro id, y se reenvía solo', async () => {
+    vi.spyOn(api, 'enviarReporte').mockRejectedValueOnce(new ErrorApiOperador('id-duplicado', 'Ese id ya existe.', 'DESPACHO_EVENTO_CLAVE_DUPLICADA', 409));
+    const r = await cola.registrar(nuevo());
+    await vi.waitFor(() => expect(cola.reportes()[0]?.estado).toBe('enviado'));
+    const final = cola.reportes();
+    expect(final).toHaveLength(1);
+    expect(final[0].id).not.toBe(r.id);
+    expect(final[0].id).toMatch(FORMATO_UUID_V4);
+    expect(final[0].reporte.id).toBe(final[0].id);
+    expect((await enDisco()).map((x) => x.id)).toEqual([final[0].id]);
+    expect(api.totalRecibidos).toBe(1);
+  });
+
+  it('si el id sigue chocando, después de varios cambios queda "No aceptado"', async () => {
+    vi.spyOn(api, 'enviarReporte').mockRejectedValue(new ErrorApiOperador('id-duplicado', 'Ese id ya existe.', 'DESPACHO_EVENTO_CLAVE_DUPLICADA', 409));
+    await cola.registrar(nuevo());
+    await vi.waitFor(() => expect(cola.reportes()[0]?.estado).toBe('rechazado'));
+    expect(cola.reportes()).toHaveLength(1);
+  });
+
+  it('hora del teléfono rechazada (400 DESPACHO_EVENTO_HORA_INVALIDA): "No aceptado" y aviso del reloj', async () => {
+    vi.spyOn(api, 'enviarReporte').mockRejectedValueOnce(
+      new ErrorApiOperador('rechazado', 'La hora de su teléfono está adelantada. Corríjala y vuelva a reportar.', CODIGO_HORA_INVALIDA, 400),
+    );
+    await cola.registrar(nuevo());
+    await cola.inactivo();
+    expect(cola.reportes()[0]).toMatchObject({ estado: 'rechazado', error: 'La hora de su teléfono está adelantada. Corríjala y vuelva a reportar.' });
+    expect(TestBed.inject(RelojTelefonoService).aviso()).toContain('no aceptó un reporte');
+  });
+
+  it('cada acuse sirve para medir la hora del teléfono contra la del servidor', async () => {
+    e.reloj.ahora = new Date('2026-11-23T16:00:00Z');
+    vi.spyOn(api, 'enviarReporte').mockResolvedValueOnce({ id: 'x', recibidoEn: '2026-11-23T15:52:00Z', resultado: 'aplicado', mensaje: null });
+    await cola.registrar(nuevo());
+    await cola.inactivo();
+    expect(TestBed.inject(RelojTelefonoService).aviso()).toContain('adelantada unos 8 minutos');
+  });
+
+  it('429: sigue pendiente y se reintenta más tarde (no es "No aceptado")', async () => {
+    vi.spyOn(api, 'enviarReporte').mockRejectedValueOnce(new ErrorApiOperador('limite', 'Demasiadas peticiones.', null, 429));
+    await cola.registrar(nuevo());
+    await cola.inactivo();
+    expect(cola.reportes()[0].estado).toBe('pendiente');
+    expect(cola.proximoReintento()).not.toBeNull();
+  });
+
+  it('la oficina descarta o anula después: al actualizar estados se ve el mensaje', async () => {
+    const a = await cola.registrar(nuevo('EnPosicionamiento'));
+    const b = await cola.registrar(nuevo('EnPatioOrigen'));
+    await vi.waitFor(() => expect(cola.pendientes()).toBe(0));
+    vi.spyOn(api, 'consultarReportes').mockResolvedValueOnce([
+      { id: a.id, resultado: 'descartado', confirmadoEn: null, mensaje: 'La oficina descartó el reporte: duplicado' },
+      { id: b.id, resultado: 'sin-efecto', confirmadoEn: null, mensaje: 'La oficina anuló este estatus: error de captura' },
+    ]);
+    await cola.actualizarEstados();
+    const porId = Object.fromEntries(cola.reportes().map((r) => [r.id, r]));
+    expect(porId[a.id]).toMatchObject({ estado: 'descartado', mensaje: 'La oficina descartó el reporte: duplicado' });
+    expect(porId[b.id]).toMatchObject({ estado: 'enviado', resultado: 'sin-efecto', mensaje: 'La oficina anuló este estatus: error de captura' });
   });
 });

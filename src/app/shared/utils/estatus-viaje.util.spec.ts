@@ -1,5 +1,5 @@
 import { salidaEjemplo } from '../../core/api/ejemplo/datos-ejemplo';
-import { EstatusViaje, ReporteOperador, Viaje, ViajeCargado, ViajeVacio } from '../../core/api/operador-api.modelos';
+import { EstatusViaje, ReporteOperador, ResultadoReporte, Viaje, ViajeCargado, ViajeVacio } from '../../core/api/operador-api.modelos';
 import {
   BOTON_ESTATUS,
   ETIQUETA_ESTATUS,
@@ -10,6 +10,10 @@ import {
   guia,
   llegadaVacio,
   marcaDeGuia,
+  ETIQUETA_MOTIVO,
+  textoEstatus,
+  textoMotivo,
+  viajeTerminado,
   operadorTermino,
   presentacionEstatus,
   pasosDisponibles,
@@ -26,10 +30,10 @@ const salida = salidaEjemplo(new Date('2026-11-23T16:00:00Z'));
 const [combustible, cargado1, cargado2, regresoTaller] = salida.viajes as [ViajeVacio, ViajeCargado, ViajeCargado, ViajeVacio];
 
 let n = 0;
-function rep(v: Viaje, estatus: EstatusViaje, estado = 'enviado', aviso: string | null = null): ReporteParaGuia {
+function rep(v: Viaje, estatus: EstatusViaje, estado = 'enviado', resultado: ResultadoReporte | null = null): ReporteParaGuia {
   n++;
   const reporte: ReporteOperador = { tipo: 'estatus', id: `r${n}`, viajeId: v.id, estatus, ocurrioEn: `2026-11-23T16:${String(n).padStart(2, '0')}:00Z`, ubicacion: null, nota: null };
-  return { reporte, estado, aviso };
+  return { reporte, estado, resultado };
 }
 const con = <T extends Viaje>(v: T, estatus: T['estatus']): T => ({ ...v, estatus });
 
@@ -100,11 +104,17 @@ describe('estatus-viaje.util: estatus del viaje y pasos del operador', () => {
 
   it('no cuentan los rechazados, los "sin efecto", los de otro viaje ni las incidencias', () => {
     const incidencia: ReporteParaGuia = {
-      reporte: { tipo: 'incidencia', id: 'i', viajeId: cargado1.id, incidencia: 'FallaMecanica', ocurrioEn: '2026-11-23T16:00:00Z', ubicacion: null, nota: null },
+      reporte: { tipo: 'incidencia', id: 'i', viajeId: cargado1.id, incidencia: 'IncidenciaMecanica', ocurrioEn: '2026-11-23T16:00:00Z', ubicacion: null, nota: null },
       estado: 'enviado',
-      aviso: null,
+      resultado: 'registrado',
     };
-    const reportes = [rep(cargado1, 'EnCarga', 'rechazado'), rep(cargado1, 'EnTransito', 'enviado', 'Ya estaba más adelante'), rep(cargado2, 'Descargado'), incidencia];
+    const reportes = [
+      rep(cargado1, 'EnCarga', 'rechazado'),
+      rep(cargado1, 'EnTransito', 'enviado', 'sin-efecto'),
+      rep(cargado1, 'EnPatioDestino', 'descartado', 'descartado'),
+      rep(cargado2, 'Descargado'),
+      incidencia,
+    ];
     expect(guia(cargado1, reportes).estatus).toBe('Asignado');
   });
 
@@ -133,7 +143,7 @@ describe('estatus-viaje.util: estatus del viaje y pasos del operador', () => {
 
   it('presentación del estatus: un solo util da texto y colores, todos con contraste ≥ 7:1 (pleno sol)', () => {
     const todos = Object.keys(ETIQUETA_ESTATUS) as EstatusViaje[];
-    expect(todos).toHaveLength(13);
+    expect(todos).toHaveLength(14);
     for (const e of todos) {
       const p = presentacionEstatus(e);
       expect(p.texto).toBe(ETIQUETA_ESTATUS[e]);
@@ -157,6 +167,27 @@ describe('estatus-viaje.util: estatus del viaje y pasos del operador', () => {
     expect(marcaDeGuia({ estatus: 'EnCarga', porReporte: true, estadoReporte: 'pendiente' })).toBe('Pendiente de enviar');
     expect(marcaDeGuia({ estatus: 'Documentado', porReporte: true, estadoReporte: 'por-confirmar' })).toBe('Pendiente de confirmar por oficina');
     expect(marcaDeGuia({ estatus: 'EnCarga', porReporte: true, estadoReporte: 'enviado' })).toBeNull();
+  });
+
+  it('Cancelado (contrato M1): se muestra, no ofrece pasos y el viaje deja de tocar', () => {
+    const cancelado = con(cargado1, 'Cancelado');
+    expect(pasosDisponibles(cancelado, [])).toEqual([]);
+    expect(guia(cancelado, [rep(cancelado, 'EnTransito', 'pendiente')]).estatus).toBe('Cancelado');
+    expect(viajeTerminado(cancelado)).toBe(true);
+    expect(presentacionEstatus('Cancelado')).toMatchObject({ texto: 'Cancelado' });
+    const conCancelado = { ...salida, viajes: [con(combustible, 'EnPatio'), cancelado, cargado2, regresoTaller] };
+    expect(viajeQueToca(conCancelado, [])).toBe(cargado2);
+  });
+
+  it('motivos de tramo: valor del backend → texto en pantalla; uno desconocido se muestra tal cual', () => {
+    expect(ETIQUETA_MOTIVO).toEqual({ Posicionamiento: 'Posicionamiento', CargaCombustible: 'Carga de combustible', Taller: 'Taller', Otro: 'Otro' });
+    expect(textoMotivo('Nuevo' as never)).toBe('Nuevo');
+  });
+
+  it('estatus desconocido (por si el servidor agrega uno): se muestra con su nombre, en gris', () => {
+    expect(textoEstatus('EnFrontera' as never)).toBe('EnFrontera');
+    const { fondo, tinta } = presentacionEstatus('Asignado');
+    expect(presentacionEstatus('EnFrontera' as never)).toEqual({ texto: 'EnFrontera', fondo, tinta });
   });
 
   it('nombres para pantalla y título', () => {

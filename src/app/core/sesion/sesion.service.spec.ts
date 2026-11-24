@@ -18,22 +18,23 @@ describe('SesionService: entrar y salir sin guardar el PIN', () => {
   });
 
   it('entra con celular (normalizado) y PIN; guarda la sesión sin el PIN', async () => {
-    await sesion.entrar('+52 (81) 1234-5678', '97531');
+    await sesion.entrar('+52 (81) 1234-5678', '975310');
     expect(sesion.sesion()).toMatchObject({ operadorId: 'ej-op-8112345678', celularTerminacion: '5678' });
     const guardado = e.almacenLocal.getItem(CLAVE_SESION)!;
-    expect(guardado).not.toContain('97531');
-    expect(Object.keys(JSON.parse(guardado)).sort()).toEqual(['celularTerminacion', 'nombre', 'operadorId', 'token']);
+    expect(guardado).not.toContain('975310');
+    // Solo el perfil: ni el PIN ni token alguno.
+    expect(Object.keys(JSON.parse(guardado)).sort()).toEqual(['celularTerminacion', 'nombre', 'operadorId']);
   });
 
   it('datos inválidos: rechaza y no deja sesión', async () => {
-    await expect(sesion.entrar('81', '1234')).rejects.toMatchObject({ tipo: 'sesion' });
+    await expect(sesion.entrar('81', '123456')).rejects.toMatchObject({ tipo: 'sesion' });
     expect(sesion.sesion()).toBeNull();
     expect(e.almacenLocal.getItem(CLAVE_SESION)).toBeNull();
   });
 
   it('salir: borra sesión y copia del viaje, va a acceso; los reportes pendientes se quedan en el teléfono', async () => {
     const navegar = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
-    await sesion.entrar('8112345678', '1234');
+    await sesion.entrar('8112345678', '123456');
     await TestBed.inject(AsignacionService).cargar();
     e.navegador.onLine = false;
     const cola = TestBed.inject(ColaReportesService);
@@ -63,8 +64,8 @@ describe('AlmacenSesion: solo lo indispensable', () => {
 
   it('descarta campos de más (p. ej. un PIN que viniera por error)', () => {
     configurar(e);
-    TestBed.inject(AlmacenSesion).guardar({ operadorId: 'a', nombre: 'N', celularTerminacion: '1234', token: 't', pin: '0000' } as never);
-    expect(JSON.parse(e.almacenLocal.getItem(CLAVE_SESION)!)).toEqual({ operadorId: 'a', nombre: 'N', celularTerminacion: '1234', token: 't' });
+    TestBed.inject(AlmacenSesion).guardar({ operadorId: 'a', nombre: 'N', celularTerminacion: '1234', token: 't', pin: '000000' } as never);
+    expect(JSON.parse(e.almacenLocal.getItem(CLAVE_SESION)!)).toEqual({ operadorId: 'a', nombre: 'N', celularTerminacion: '1234' });
   });
 
   it('lo guardado dañado o incompleto = sin sesión', () => {
@@ -82,10 +83,10 @@ describe('AlmacenSesion: solo lo indispensable', () => {
   it('vencer: limpia y deja aviso; entrar de nuevo quita el aviso', () => {
     configurar(e);
     const a = TestBed.inject(AlmacenSesion);
-    a.guardar({ operadorId: 'a', nombre: 'N', celularTerminacion: '1234', token: 't' });
+    a.guardar({ operadorId: 'a', nombre: 'N', celularTerminacion: '1234' });
     a.vencer('Venció');
     expect([a.sesion(), a.aviso()]).toEqual([null, 'Venció']);
-    a.guardar({ operadorId: 'a', nombre: 'N', celularTerminacion: '1234', token: 't' });
+    a.guardar({ operadorId: 'a', nombre: 'N', celularTerminacion: '1234' });
     expect(a.aviso()).toBeNull();
   });
 });

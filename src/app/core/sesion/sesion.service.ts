@@ -25,8 +25,16 @@ export class SesionService {
     void this.cola.procesar();
   }
 
-  /** Cierra la sesión. Los reportes pendientes se quedan en el teléfono y se envían cuando ese operador vuelva a entrar. */
+  /**
+   * Cierra la sesión: borra token y refresh, la copia del viaje y el perfil. Los reportes pendientes se quedan en el
+   * teléfono y se envían cuando ese operador vuelva a entrar.
+   */
   async salir(): Promise<void> {
+    try {
+      await this.api.cerrarSesion();
+    } catch {
+      // Aunque falle el borrado, se sale igual (no hay nada que mostrar al operador).
+    }
     this.asignacion.olvidar(this.almacen.operadorId());
     this.almacen.limpiar();
     await this.router.navigateByUrl('/acceso');

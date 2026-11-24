@@ -1,9 +1,10 @@
 /**
  * Reglas de la cola de reportes del teléfono. PURO: el servicio solo guarda, envía y aplica estas funciones.
  *
- * Ciclo: pendiente → (enviado | por-confirmar | confirmado | rechazado); por-confirmar → confirmado.
- * Un reporte nace "pendiente" y se guarda ANTES de intentar enviarlo; si falla por conexión o por el servidor sigue
- * pendiente y se reintenta; si el servidor lo rechaza no se reintenta.
+ * Ciclo: pendiente → (enviado | por-confirmar | confirmado | descartado | rechazado). Después, el estado que dé el
+ * servidor manda: un "enviado" puede volverse "sin efecto" (la oficina lo anuló) o "descartado"; un "por confirmar",
+ * "confirmado". Un reporte nace "pendiente" y se guarda ANTES de intentar enviarlo; si falla por conexión o por el
+ * servidor sigue pendiente y se reintenta; si el servidor lo rechaza no se reintenta.
  */
 import { AcuseReporte, EstadoRemotoReporte, IsoUtc, ReporteOperador, ResultadoReporte } from '../../core/api/operador-api.modelos';
 import { TipoErrorApi } from '../../core/api/operador-api';
@@ -14,6 +15,7 @@ export const ETIQUETA_ESTADO_REPORTE: Readonly<Record<EstadoReporteLocal, string
   enviado: 'Enviado',
   'por-confirmar': 'Pendiente de confirmar por oficina',
   confirmado: 'Confirmado',
+  descartado: 'Descartado por oficina',
   rechazado: 'No aceptado',
 };
 
@@ -24,6 +26,7 @@ export const ESTADO_POR_RESULTADO: Readonly<Record<ResultadoReporte, EstadoRepor
   'sin-efecto': 'enviado',
   'por-confirmar': 'por-confirmar',
   confirmado: 'confirmado',
+  descartado: 'descartado',
 };
 
 /** Esperas entre reintentos cuando el servidor falla (s): 5, 15, 30, 60 y luego cada 2 min. */
@@ -41,14 +44,20 @@ export function crearReporteLocal(reporte: ReporteOperador, operadorId: string, 
     reporte,
     resumen,
     estado: 'pendiente',
+    resultado: null,
+    mensaje: null,
     creadoEn: ahora,
     intentos: 0,
     ultimoIntentoEn: null,
     enviadoEn: null,
     confirmadoEn: null,
     error: null,
-    aviso: null,
   };
+}
+
+/** ¿Este reporte cuenta como algo que el operador ya hizo? No: rechazados, descartados ni recibidos sin efecto. */
+export function cuentaComoHecho(r: { estado: string; resultado?: ResultadoReporte | null }): boolean {
+  return r.estado !== 'rechazado' && r.estado !== 'descartado' && r.resultado !== 'sin-efecto';
 }
 
 /** Pendientes de ese operador, en el orden en que se crearon (se envían en orden). */
@@ -58,22 +67,35 @@ export function porEnviar(reportes: readonly ReporteLocal[], operadorId: string)
     .sort((a, b) => a.creadoEn.localeCompare(b.creadoEn) || a.id.localeCompare(b.id));
 }
 
-/** Hitos de ese operador que esperan la confirmación de la oficina. */
-export function porConfirmar(reportes: readonly ReporteLocal[], operadorId: string): ReporteLocal[] {
-  return reportes.filter((r) => r.operadorId === operadorId && r.estado === 'por-confirmar');
+/**
+ * Reportes cuyo estado aún puede cambiar en el servidor (enviados y por confirmar), lo más reciente primero, hasta
+ * `max` (el contrato acepta 200 ids por consulta).
+ */
+export function porConsultar(reportes: readonly ReporteLocal[], operadorId: string, max = 200): ReporteLocal[] {
+  return reportes
+    .filter((r) => r.operadorId === operadorId && (r.estado === 'enviado' || r.estado === 'por-confirmar') && r.resultado !== 'sin-efecto')
+    .sort((a, b) => b.creadoEn.localeCompare(a.creadoEn))
+    .slice(0, max);
 }
 
-export function conEnvioExitoso(r: ReporteLocal, acuse: AcuseReporte, ahora: IsoUtc): ReporteLocal {
-  const estado = ESTADO_POR_RESULTADO[acuse.resultado];
+function conResultado(r: ReporteLocal, resultado: ResultadoReporte, mensaje: string | null, confirmadoEn: IsoUtc | null, ahora: IsoUtc): ReporteLocal {
+  const estado = ESTADO_POR_RESULTADO[resultado];
   return {
     ...r,
     estado,
+    resultado,
+    mensaje: mensaje ?? (resultado === 'sin-efecto' ? 'Recibido sin cambiar el estatus del viaje.' : null),
+    confirmadoEn: estado === 'confirmado' ? (confirmadoEn ?? r.confirmadoEn ?? ahora) : r.confirmadoEn,
+  };
+}
+
+export function conEnvioExitoso(r: ReporteLocal, acuse: AcuseReporte, ahora: IsoUtc): ReporteLocal {
+  return {
+    ...conResultado(r, acuse.resultado, acuse.mensaje, null, ahora),
     intentos: r.intentos + 1,
     ultimoIntentoEn: ahora,
     enviadoEn: acuse.recibidoEn || ahora,
-    confirmadoEn: estado === 'confirmado' ? (r.confirmadoEn ?? ahora) : r.confirmadoEn,
     error: null,
-    aviso: acuse.resultado === 'sin-efecto' ? (acuse.mensaje ?? 'Recibido sin cambiar el estatus del viaje.') : null,
   };
 }
 
@@ -88,10 +110,16 @@ export function conFallaEnvio(r: ReporteLocal, tipo: TipoErrorApi, mensaje: stri
   };
 }
 
-/** Aplica lo que dice el servidor. Solo de por-confirmar a confirmado (nunca hacia atrás). */
+/** El mismo reporte con otro id (409: ese id lo usó otro operador). Sigue pendiente para reenviarse. */
+export function conNuevoId(r: ReporteLocal, id: string): ReporteLocal {
+  return { ...r, id, reporte: { ...r.reporte, id }, estado: 'pendiente', error: null };
+}
+
+/** Aplica el estado que dice el servidor. Sin cambios = el mismo objeto. */
 export function conEstadoRemoto(r: ReporteLocal, remoto: EstadoRemotoReporte, ahora: IsoUtc): ReporteLocal {
-  if (r.estado !== 'por-confirmar' || remoto.resultado !== 'confirmado') return r;
-  return { ...r, estado: 'confirmado', confirmadoEn: remoto.confirmadoEn ?? ahora };
+  if (r.estado === 'pendiente' || r.estado === 'rechazado') return r;
+  if (remoto.resultado === r.resultado && (remoto.mensaje ?? null) === r.mensaje) return r;
+  return conResultado(r, remoto.resultado, remoto.mensaje, remoto.confirmadoEn, ahora);
 }
 
 /** Lo más reciente primero (por hora del reporte). */
@@ -104,16 +132,32 @@ export function textoPendientes(n: number): string {
   return n === 1 ? 'Falta enviar 1 reporte' : `Faltan enviar ${n} reportes`;
 }
 
-/** ¿Lo guardado parece un registro válido de esta versión de la app? (descarta formatos viejos o dañados) */
-export function esReporteLocalValido(x: unknown): x is ReporteLocal {
-  const r = x as ReporteLocal | null;
-  return (
-    !!r &&
-    typeof r.id === 'string' &&
-    typeof r.operadorId === 'string' &&
-    !!r.reporte &&
-    (r.reporte.tipo === 'estatus' || r.reporte.tipo === 'incidencia') &&
-    typeof r.reporte.viajeId === 'string' &&
-    typeof r.reporte.ocurrioEn === 'string'
-  );
+/** Nombres de incidencia del paso 2 (ejemplo) → los del backend (P10 a). */
+const INCIDENCIA_ANTERIOR: Readonly<Record<string, string>> = {
+  DetenidoParador: 'DetenidoEnParador',
+  FallaMecanica: 'IncidenciaMecanica',
+  RetenInspeccion: 'RetenOInspeccion',
+  DesvioRuta: 'DesvioDeRuta',
+};
+
+/**
+ * Registro leído del teléfono → ReporteLocal de esta versión, o null si no sirve. Traduce lo guardado por versiones
+ * anteriores (paso 2: `aviso` en vez de `resultado`/`mensaje`, nombres de incidencia viejos). Descarta el paso 1.
+ */
+export function normalizarReporteLocal(x: unknown): ReporteLocal | null {
+  const r = x as (ReporteLocal & { aviso?: string | null }) | null;
+  if (!r || typeof r.id !== 'string' || typeof r.operadorId !== 'string' || !r.reporte) return null;
+  if (r.reporte.tipo !== 'estatus' && r.reporte.tipo !== 'incidencia') return null;
+  if (typeof r.reporte.viajeId !== 'string' || typeof r.reporte.ocurrioEn !== 'string') return null;
+  const { aviso, ...resto } = r;
+  let reporte = r.reporte;
+  if (reporte.tipo === 'incidencia' && INCIDENCIA_ANTERIOR[reporte.incidencia]) {
+    reporte = { ...reporte, incidencia: INCIDENCIA_ANTERIOR[reporte.incidencia] as typeof reporte.incidencia };
+  }
+  return {
+    ...resto,
+    reporte,
+    resultado: r.resultado ?? (aviso ? 'sin-efecto' : null),
+    mensaje: r.mensaje ?? aviso ?? null,
+  };
 }

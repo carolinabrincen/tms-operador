@@ -3,7 +3,7 @@
  *
  * fuenteDatos:
  *  - 'ejemplo': implementación en memoria (OperadorApiEjemplo); muestra el aviso "Datos de ejemplo".
- *  - 'api': implementación real contra apiUrl. Aún no existe: se agregará cuando haya contrato.
+ *  - 'api': implementación real (contrato M1) contra apiUrl. En desarrollo: npm run start:api.
  */
 export interface Entorno {
   production: boolean;
