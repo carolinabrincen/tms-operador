@@ -12,6 +12,9 @@
  *  - Solo hacia adelante: un estatus igual o anterior al actual se recibe "sin-efecto".
  *  - La "oficina" también trabaja sola: `oficinaAvanzaTrasMs` después de "EnCarga" pone Documentado ella misma (si el
  *    operador no lo reportó), y `cierreTrasMs` después de Descargado confirmado o de la llegada en vacío cierra el viaje.
+ *  - Para pruebas, la "oficina" puede además anular un hito ya confirmado (`anularHito`) y cerrar la salida
+ *    (`cerrarSalida`), como en el contrato M1 (3.1 y 2).
+ *  - Los mensajes van en español legible, como los del servidor (nunca el valor técnico).
  */
 import { mensajeCelular, mensajePin, normalizarCelular, terminacionCelular } from '../../../shared/utils/acceso.util';
 import { esHito, esPasoDelOperador, rango, textoEstatus, viajeTerminado } from '../../../shared/utils/estatus-viaje.util';
@@ -68,6 +71,8 @@ interface Programado {
 
 interface EstadoOperador {
   salida: Salida | null;
+  /** La salida que la oficina cerró: sus reportes tardíos se reciben como historial (sin efecto). */
+  cerrada: Salida | null;
   programados: Programado[];
 }
 
@@ -129,6 +134,18 @@ export class OperadorApiEjemplo implements OperadorApi {
       return this.acuse(previo); // reenvío del mismo id: mismo resultado, sin duplicar
     }
     const viaje = estado.salida?.viajes.find((v) => v.id === reporte.viajeId);
+    if (!viaje && estado.cerrada?.viajes.some((v) => v.id === reporte.viajeId)) {
+      const tardio: Recibido = {
+        reporte: structuredClone(reporte),
+        operadorId: sesion.operadorId,
+        recibidoEn: this.iso(),
+        resultado: 'sin-efecto',
+        mensaje: `La salida ${estado.cerrada.folio} ya estaba cerrada; quedó como historial.`,
+        confirmadoEn: null,
+      };
+      this.recibidos.set(reporte.id, tardio);
+      return this.acuse(tardio);
+    }
     if (!viaje) throw new ErrorApiOperador('rechazado', 'Ese viaje no está asignado a usted.');
     if (msDeIso(reporte.ocurrioEn) == null) throw new ErrorApiOperador('rechazado', 'La hora del reporte no es válida.');
 
@@ -146,6 +163,39 @@ export class OperadorApiEjemplo implements OperadorApi {
       .map((id) => this.recibidos.get(id))
       .filter((r): r is Recibido => !!r && r.operadorId === sesion.operadorId)
       .map((r) => ({ id: r.reporte.id, resultado: r.resultado, confirmadoEn: r.confirmadoEn, mensaje: r.resultado === 'confirmado' ? null : r.mensaje }));
+  }
+
+  // ------------------------------------------------------------------ acciones de la "oficina" (para pruebas)
+
+  /**
+   * La oficina anula el hito (Documentado o Descargado) que había confirmado un reporte: ese reporte pasa a
+   * "sin efecto", sale del historial y el viaje vuelve al estatus anterior. Devuelve false si no hay tal hito.
+   */
+  anularHito(operadorId: string, viajeId: string, estatus: 'Documentado' | 'Descargado', motivo: string): boolean {
+    const estado = this.operadores.get(operadorId);
+    const viaje = estado?.salida?.viajes.find((v) => v.id === viajeId);
+    const rec = [...this.recibidos.values()].find(
+      (r) => r.operadorId === operadorId && r.resultado === 'confirmado' && r.reporte.viajeId === viajeId && r.reporte.tipo === 'estatus' && r.reporte.estatus === estatus,
+    );
+    if (!viaje || !rec) return false;
+    rec.resultado = 'sin-efecto';
+    rec.confirmadoEn = null;
+    rec.mensaje = `La oficina anuló el estatus ${textoEstatus(estatus)}: ${motivo}. Puedes volver a reportarlo.`;
+    viaje.historial = viaje.historial.filter((e) => e.reporteId !== rec.reporte.id);
+    const anterior = viaje.historial
+      .filter((e): e is EventoViaje & { tipo: 'estatus' } => e.tipo === 'estatus')
+      .reduce<EstatusViaje>((mejor, e) => (rango(viaje.tipo, e.estatus) > rango(viaje.tipo, mejor) ? e.estatus : mejor), 'Asignado');
+    (viaje as { estatus: EstatusViaje }).estatus = anterior;
+    return true;
+  }
+
+  /** La oficina cierra la salida del operador: la asignación llega sin salida. */
+  cerrarSalida(operadorId: string): void {
+    const estado = this.operadores.get(operadorId);
+    if (!estado?.salida) return;
+    estado.cerrada = estado.salida;
+    estado.salida = null;
+    estado.programados = [];
   }
 
   // ------------------------------------------------------------------ reglas del ejemplo
@@ -223,7 +273,7 @@ export class OperadorApiEjemplo implements OperadorApi {
   private estadoDe(sesion: { operadorId: string; sinViaje: boolean }): EstadoOperador {
     let estado = this.operadores.get(sesion.operadorId);
     if (!estado) {
-      estado = { salida: sesion.sinViaje ? null : salidaEjemplo(this.opciones.ahora()), programados: [] };
+      estado = { salida: sesion.sinViaje ? null : salidaEjemplo(this.opciones.ahora()), cerrada: null, programados: [] };
       this.operadores.set(sesion.operadorId, estado);
     }
     const ahora = this.opciones.ahora().getTime();

@@ -3,7 +3,8 @@
  *
  * Ciclo: pendiente → (enviado | por-confirmar | confirmado | descartado | rechazado). Después, el estado que dé el
  * servidor manda: un "enviado" puede volverse "sin efecto" (la oficina lo anuló) o "descartado"; un "por confirmar",
- * "confirmado". Un reporte nace "pendiente" y se guarda ANTES de intentar enviarlo; si falla por conexión o por el
+ * "confirmado"; y un "confirmado", "sin efecto" si la oficina anula el hito (el operador puede volver a reportarlo,
+ * con otro id). Un reporte nace "pendiente" y se guarda ANTES de intentar enviarlo; si falla por conexión o por el
  * servidor sigue pendiente y se reintenta; si el servidor lo rechaza no se reintenta.
  */
 import { AcuseReporte, EstadoRemotoReporte, IsoUtc, ReporteOperador, ResultadoReporte } from '../../core/api/operador-api.modelos';
@@ -68,12 +69,26 @@ export function porEnviar(reportes: readonly ReporteLocal[], operadorId: string)
 }
 
 /**
- * Reportes cuyo estado aún puede cambiar en el servidor (enviados y por confirmar), lo más reciente primero, hasta
- * `max` (el contrato acepta 200 ids por consulta).
+ * Reportes cuyo estado aún puede cambiar en el servidor, lo más reciente primero, hasta `max` (el contrato acepta 200
+ * ids por consulta):
+ *  - enviados y por confirmar (la oficina confirma, anula o descarta);
+ *  - confirmados de un viaje de la salida ACTIVA (`viajesActivos`): la oficina puede anular un hito ya confirmado y
+ *    el reporte pasa a "sin efecto". Cerrada o cancelada la salida, ya no se preguntan.
+ * Un "sin efecto" ya no cambia: no se pregunta.
  */
-export function porConsultar(reportes: readonly ReporteLocal[], operadorId: string, max = 200): ReporteLocal[] {
+export function porConsultar(
+  reportes: readonly ReporteLocal[],
+  operadorId: string,
+  viajesActivos: ReadonlySet<string> = new Set(),
+  max = 200,
+): ReporteLocal[] {
   return reportes
-    .filter((r) => r.operadorId === operadorId && (r.estado === 'enviado' || r.estado === 'por-confirmar') && r.resultado !== 'sin-efecto')
+    .filter(
+      (r) =>
+        r.operadorId === operadorId &&
+        r.resultado !== 'sin-efecto' &&
+        (r.estado === 'enviado' || r.estado === 'por-confirmar' || (r.estado === 'confirmado' && viajesActivos.has(r.reporte.viajeId))),
+    )
     .sort((a, b) => b.creadoEn.localeCompare(a.creadoEn))
     .slice(0, max);
 }
@@ -85,7 +100,8 @@ function conResultado(r: ReporteLocal, resultado: ResultadoReporte, mensaje: str
     estado,
     resultado,
     mensaje: mensaje ?? (resultado === 'sin-efecto' ? 'Recibido sin cambiar el estatus del viaje.' : null),
-    confirmadoEn: estado === 'confirmado' ? (confirmadoEn ?? r.confirmadoEn ?? ahora) : r.confirmadoEn,
+    // Solo un confirmado tiene hora de confirmación; si la oficina anuló el hito, vuelve a null (contrato 3.1).
+    confirmadoEn: estado === 'confirmado' ? (confirmadoEn ?? r.confirmadoEn ?? ahora) : null,
   };
 }
 

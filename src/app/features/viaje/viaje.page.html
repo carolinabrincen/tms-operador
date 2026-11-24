@@ -23,6 +23,11 @@
     <app-linea-tiempo [entradas]="linea()" />
   } @else if (estadoCarga() === 'cargando' || estadoCarga() === 'inicial') {
     <p class="texto-suave" role="status">Cargando…</p>
+  } @else if (sinSalida()) {
+    <p class="alerta alerta-aviso" role="status">
+      Este viaje ya no está activo: la oficina cerró o canceló la salida. Sus reportes siguen en
+      <a routerLink="/reportes">Mis reportes</a>.
+    </p>
   } @else {
     <p class="alerta alerta-aviso" role="status">
       No encontramos este viaje en lo que tiene asignado. Regrese a Mi viaje y actualice.

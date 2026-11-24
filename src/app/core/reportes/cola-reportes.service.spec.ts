@@ -3,6 +3,8 @@ import { OperadorApiEjemplo } from '../api/ejemplo/operador-api-ejemplo';
 import { CODIGO_HORA_INVALIDA, ErrorApiOperador, OPERADOR_API } from '../api/operador-api';
 import { RelojTelefonoService } from '../reloj/reloj-telefono.service';
 import { AlmacenSesion, MENSAJE_SESION_VENCIDA } from '../sesion/almacen-sesion';
+import { AsignacionService } from '../viaje/asignacion.service';
+import { pasosDisponibles } from '../../shared/utils/estatus-viaje.util';
 import { EstatusViaje } from '../api/operador-api.modelos';
 import { FORMATO_UUID_V4 } from '../../shared/utils/id-reporte.util';
 import { EntornoPruebas, configurar, crearEntorno, entrarComo, ponerEnLinea } from '../../testing/entorno-pruebas';
@@ -247,11 +249,67 @@ describe('ColaReportesService: guardar primero, enviar después, reintentar sin 
     await vi.waitFor(() => expect(cola.pendientes()).toBe(0));
     vi.spyOn(api, 'consultarReportes').mockResolvedValueOnce([
       { id: a.id, resultado: 'descartado', confirmadoEn: null, mensaje: 'La oficina descartó el reporte: duplicado' },
-      { id: b.id, resultado: 'sin-efecto', confirmadoEn: null, mensaje: 'La oficina anuló este estatus: error de captura' },
+      { id: b.id, resultado: 'sin-efecto', confirmadoEn: null, mensaje: 'La oficina anuló el estatus En tránsito: error de captura' },
     ]);
     await cola.actualizarEstados();
     const porId = Object.fromEntries(cola.reportes().map((r) => [r.id, r]));
     expect(porId[a.id]).toMatchObject({ estado: 'descartado', mensaje: 'La oficina descartó el reporte: duplicado' });
-    expect(porId[b.id]).toMatchObject({ estado: 'enviado', resultado: 'sin-efecto', mensaje: 'La oficina anuló este estatus: error de captura' });
+    expect(porId[b.id]).toMatchObject({ estado: 'enviado', resultado: 'sin-efecto', mensaje: 'La oficina anuló el estatus En tránsito: error de captura' });
+  });
+
+  it('hito anulado por la oficina: el confirmado pasa a "sin efecto" con su mensaje, se vuelve a ofrecer el paso y el nuevo reporte lleva otro id', async () => {
+    const asignacion = TestBed.inject(AsignacionService);
+    await asignacion.cargar();
+    await cola.registrar(nuevo('EnCarga'));
+    const primero = await cola.registrar(nuevo('Documentado'));
+    await cola.inactivo();
+    e.reloj.ahora = new Date('2026-11-23T16:00:25Z');
+    await cola.actualizarEstados();
+    expect(cola.reportes().find((r) => r.id === primero.id)!.estado).toBe('confirmado');
+
+    expect(api.anularHito('ej-op-8112345678', 'ej-via-771', 'Documentado', 'faltó la carta porte')).toBe(true);
+    const antes = cola.enviados();
+    await cola.actualizarEstados(); // el confirmado se sigue consultando: su salida está activa
+    const anulado = cola.reportes().find((r) => r.id === primero.id)!;
+    expect(anulado).toMatchObject({
+      estado: 'enviado',
+      resultado: 'sin-efecto',
+      confirmadoEn: null,
+      mensaje: 'La oficina anuló el estatus Documentado: faltó la carta porte. Puedes volver a reportarlo.',
+    });
+    expect(cola.enviados()).toBe(antes + 1); // las pantallas releen el viaje
+
+    await asignacion.cargar();
+    const viaje = asignacion.asignacion()!.salida!.viajes.find((v) => v.id === 'ej-via-771')!;
+    expect(viaje.estatus).toBe('EnCarga'); // el viaje volvió al estatus anterior
+    expect(pasosDisponibles(viaje, cola.reportes())[0]).toBe('Documentado');
+
+    const otraVez = await cola.registrar(nuevo('Documentado'));
+    await cola.inactivo();
+    expect(otraVez.id).not.toBe(primero.id);
+    expect(cola.reportes().find((r) => r.id === otraVez.id)!.estado).toBe('por-confirmar');
+  });
+
+  it('salida cerrada por la oficina: los confirmados ya no se consultan y los reportes se conservan', async () => {
+    const asignacion = TestBed.inject(AsignacionService);
+    await asignacion.cargar();
+    const hito = await cola.registrar(nuevo('Documentado'));
+    await cola.inactivo();
+    e.reloj.ahora = new Date('2026-11-23T16:00:25Z');
+    await cola.actualizarEstados();
+    expect(cola.reportes()[0].estado).toBe('confirmado');
+
+    const consulta = vi.spyOn(api, 'consultarReportes');
+    await cola.actualizarEstados();
+    expect(consulta).toHaveBeenCalledWith([hito.id]); // salida activa: se sigue preguntando
+
+    api.cerrarSalida('ej-op-8112345678');
+    await asignacion.cargar();
+    expect(asignacion.asignacion()).toEqual({ salida: null });
+    consulta.mockClear();
+    await cola.actualizarEstados();
+    expect(consulta).not.toHaveBeenCalled();
+    expect(cola.reportes()).toHaveLength(1);
+    expect(await enDisco()).toHaveLength(1);
   });
 });

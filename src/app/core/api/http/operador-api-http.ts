@@ -1,6 +1,6 @@
 import { HttpClient, HttpErrorResponse, HttpHeaders } from '@angular/common/http';
 import { InjectionToken, inject } from '@angular/core';
-import { firstValueFrom } from 'rxjs';
+import { Observable, Subject, firstValueFrom, takeUntil } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 import { NAVEGADOR } from '../../plataforma';
 import { ALMACEN_CREDENCIALES } from '../../sesion/almacen-credenciales';
@@ -23,6 +23,12 @@ export const API_URL = new InjectionToken<string>('API_URL', { providedIn: 'root
 /** Nombre del Web Lock que serializa la renovación entre pestañas. */
 export const NOMBRE_LOCK_RENOVACION = 'ct-operador-renovar';
 
+/**
+ * Cuánto se espera al servidor al salir antes de borrar de todos modos (ms). Salir nunca se bloquea: sin señal o con
+ * el servidor lento, se borra en el teléfono y listo.
+ */
+export const ESPERA_CIERRE_SESION_MS = new InjectionToken<number>('ESPERA_CIERRE_SESION_MS', { providedIn: 'root', factory: () => 4000 });
+
 type Metodo = 'GET' | 'POST';
 
 /**
@@ -31,6 +37,7 @@ type Metodo = 'GET' | 'POST';
  * Sesión:
  *  - Login y renovación guardan token y refresh en IndexedDB (AlmacenCredenciales). Nunca salen de aquí: no se
  *    imprimen, no van en mensajes de error y las pantallas no los ven.
+ *  - Al salir se avisa al servidor (cierra solo esta sesión) y se borran token y refresh aunque el aviso falle.
  *  - Ante un 401 se renueva UNA vez y se repite la petición. Si renovar da 401, se borran las credenciales y se
  *    rechaza con 'sesion' (la app pide el PIN; la cola de reportes no se toca).
  *  - El refresh es rotativo y usar uno ya usado cierra TODAS las sesiones del operador: la renovación va de una en una
@@ -44,6 +51,7 @@ export class OperadorApiHttp implements OperadorApi {
   private readonly base = `${inject(API_URL).replace(/\/+$/, '')}/operador`;
   private readonly almacen = inject(ALMACEN_CREDENCIALES);
   private readonly navegador = inject(NAVEGADOR);
+  private readonly esperaCierreMs = inject(ESPERA_CIERRE_SESION_MS);
   private renovando: Promise<Credenciales> | null = null;
 
   async iniciarSesion(celular: string, pin: string): Promise<SesionOperador> {
@@ -57,8 +65,22 @@ export class OperadorApiHttp implements OperadorApi {
     await this.renovar(null);
   }
 
+  /**
+   * Cierra ESTA sesión en el servidor (1.3: 204 siempre, solo este teléfono) y después borra token y refresh del
+   * teléfono. Si no hay señal, el servidor falla o tarda más de ESPERA_CIERRE_SESION_MS, se borra igual.
+   */
   async cerrarSesion(): Promise<void> {
-    await this.almacen.borrar();
+    const cancelar = new Subject<void>();
+    let limite: ReturnType<typeof setTimeout> | undefined;
+    const tiempoAgotado = new Promise<void>((resolver) => (limite = setTimeout(resolver, this.esperaCierreMs)));
+    try {
+      await Promise.race([this.avisarCierre(cancelar).catch(() => undefined), tiempoAgotado]);
+    } finally {
+      clearTimeout(limite);
+      cancelar.next(); // si el servidor no contestó a tiempo, se cancela la petición
+      cancelar.complete();
+      await this.almacen.borrar();
+    }
   }
 
   async obtenerAsignacion(): Promise<AsignacionOperador> {
@@ -79,6 +101,14 @@ export class OperadorApiHttp implements OperadorApi {
   }
 
   // ------------------------------------------------------------------ internos
+
+  /** POST sesion/cerrar con el refresh guardado. Si hay una renovación en curso, se espera (el refresh cambia). */
+  private async avisarCierre(cancelar: Observable<void>): Promise<void> {
+    await this.renovando?.catch(() => undefined);
+    const credenciales = await this.almacen.leer();
+    if (!credenciales) return;
+    await this.peticion('POST', 'sesion/cerrar', { refreshToken: credenciales.refreshToken }, null, 'renovar', cancelar);
+  }
 
   /** Petición con token. 401 → renovar una vez y repetir; si vuelve el 401, 'sesion'. */
   private async autorizada(metodo: Metodo, ruta: string, cuerpo?: unknown): Promise<unknown> {
@@ -124,14 +154,21 @@ export class OperadorApiHttp implements OperadorApi {
   }
 
   /** Una petición HTTP. Cualquier error sale ya traducido a ErrorApiOperador (sin datos de la petición). */
-  private async peticion(metodo: Metodo, ruta: string, cuerpo: unknown, token: string | null, contexto: ContextoPeticion): Promise<unknown> {
+  private async peticion(
+    metodo: Metodo,
+    ruta: string,
+    cuerpo: unknown,
+    token: string | null,
+    contexto: ContextoPeticion,
+    cancelar?: Observable<void>,
+  ): Promise<unknown> {
     let headers = new HttpHeaders();
     if (token) headers = headers.set('Authorization', `Bearer ${token}`);
     const url = `${this.base}/${ruta}`;
+    const solicitud = metodo === 'GET' ? this.http.get<unknown>(url, { headers }) : this.http.post<unknown>(url, cuerpo ?? {}, { headers });
     try {
-      return await firstValueFrom(
-        metodo === 'GET' ? this.http.get<unknown>(url, { headers }) : this.http.post<unknown>(url, cuerpo ?? {}, { headers }),
-      );
+      // Cancelada antes de responder = sin conexión.
+      return await firstValueFrom(cancelar ? solicitud.pipe(takeUntil(cancelar)) : solicitud);
     } catch (e) {
       if (e instanceof HttpErrorResponse) throw clasificarError(e.status, e.error, contexto);
       throw new ErrorApiOperador('sin-conexion', MENSAJES.sinConexion);

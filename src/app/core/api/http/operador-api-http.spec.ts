@@ -8,7 +8,7 @@ import { CODIGO_HORA_INVALIDA, ErrorApiOperador } from '../operador-api';
 import { ReporteOperador } from '../operador-api.modelos';
 import { CODIGO_CLAVE_DUPLICADA, CODIGO_SIN_ACCESO, MENSAJES } from './errores-api.util';
 import { Credenciales } from './mapeo-api.util';
-import { API_URL, NOMBRE_LOCK_RENOVACION, OperadorApiHttp } from './operador-api-http';
+import { API_URL, ESPERA_CIERRE_SESION_MS, NOMBRE_LOCK_RENOVACION, OperadorApiHttp } from './operador-api-http';
 
 const BASE = 'https://api.prueba/api/operador';
 const CRED_1: Credenciales = { token: 'token-1', expiraEn: '2026-11-23T21:05:00Z', refreshToken: 'refresh-1', refreshExpiraEn: '2026-12-23T20:05:00Z' };
@@ -40,6 +40,7 @@ describe('OperadorApiHttp: la API real según el contrato M1', () => {
         { provide: API_URL, useValue: 'https://api.prueba/api/' },
         { provide: ALMACEN_CREDENCIALES, useValue: almacen },
         { provide: NAVEGADOR, useValue: navegador },
+        { provide: ESPERA_CIERRE_SESION_MS, useValue: 200 },
       ],
     });
     api = TestBed.runInInjectionContext(() => new OperadorApiHttp());
@@ -99,10 +100,43 @@ describe('OperadorApiHttp: la API real según el contrato M1', () => {
     expect(await errorDe(p)).toMatchObject({ tipo: 'limite', message: 'Demasiados intentos. Espere 15 minutos y vuelva a intentar.' });
   });
 
-  it('cerrar sesión borra token y refresh', async () => {
+  it('cerrar sesión: POST sesion/cerrar con el refresh (sin token) y DESPUÉS borra token y refresh', async () => {
     await almacen.guardar(CRED_1);
-    await api.cerrarSesion();
+    const p = api.cerrarSesion();
+    const req = await pedido('POST', 'sesion/cerrar');
+    expect(req.request.body).toEqual({ refreshToken: 'refresh-1' });
+    expect(req.request.headers.has('Authorization')).toBe(false);
+    expect(await almacen.leer()).toEqual(CRED_1); // aún no se borra: primero el servidor
+    req.flush(null, { status: 204, statusText: 'No Content' });
+    await p;
     expect(await almacen.leer()).toBeNull();
+  });
+
+  it('cerrar sesión sin señal o con error del servidor: borra igual en el teléfono', async () => {
+    await almacen.guardar(CRED_1);
+    const p1 = api.cerrarSesion();
+    (await pedido('POST', 'sesion/cerrar')).error(new ProgressEvent('error'));
+    await p1;
+    expect(await almacen.leer()).toBeNull();
+    await almacen.guardar(CRED_1);
+    const p2 = api.cerrarSesion();
+    falla(await pedido('POST', 'sesion/cerrar'), 429);
+    await p2;
+    expect(await almacen.leer()).toBeNull();
+  });
+
+  it('cerrar sesión: si el servidor tarda más de la espera, no se bloquea; borra y cancela la petición', async () => {
+    await almacen.guardar(CRED_1);
+    const p = api.cerrarSesion();
+    const req = await pedido('POST', 'sesion/cerrar');
+    await p; // nadie responde: termina sola al agotarse la espera (200 ms en la prueba)
+    expect(await almacen.leer()).toBeNull();
+    expect(req.cancelled).toBe(true);
+  });
+
+  it('cerrar sesión sin credenciales: no llama al servidor y no falla', async () => {
+    await api.cerrarSesion();
+    http.expectNone(`${BASE}/sesion/cerrar`);
   });
 
   // ------------------------------------------------------------------ asignación
@@ -236,9 +270,19 @@ describe('OperadorApiHttp: la API real según el contrato M1', () => {
     expect(await p).toEqual({ id: REPORTE.id, recibidoEn: '2026-11-23T20:05:03Z', resultado: 'aplicado', mensaje: null });
   });
 
+  it('ubicación con coordenadas y precisión vacía (precisionM null): se manda tal cual, el contrato la acepta', async () => {
+    await almacen.guardar(CRED_1);
+    const ubicacion = { lat: 19.4326, lng: -99.1332, precisionM: null, tomadoEn: '2026-11-23T20:04:58Z' };
+    const p = api.enviarReporte({ ...REPORTE, ubicacion });
+    const req = await pedido('POST', 'reportes');
+    expect(req.request.body.ubicacion).toEqual(ubicacion);
+    req.flush({ id: REPORTE.id, recibidoEn: '2026-11-23T20:05:03Z', resultado: 'aplicado', mensaje: null });
+    expect((await p).resultado).toBe('aplicado');
+  });
+
   for (const [resultado, mensaje] of [
     ['por-confirmar', 'Recibido; la oficina lo confirma.'],
-    ['sin-efecto', 'La oficina ya registró EnTransito; el estatus no cambió.'],
+    ['sin-efecto', 'La oficina ya registró En tránsito; el estatus no cambió.'],
     ['descartado', 'La oficina descartó el reporte: duplicado'],
   ] as const) {
     it(`reporte ${resultado}: el acuse trae resultado y mensaje`, async () => {
@@ -299,10 +343,10 @@ describe('OperadorApiHttp: la API real según el contrato M1', () => {
     r1.flush([{ id: 'id-0', resultado: 'confirmado', confirmadoEn: '2026-11-23T20:40:00Z', mensaje: null }]);
     const r2 = await pedido('POST', 'reportes/estado');
     expect(r2.request.body.ids).toEqual(ids.slice(200));
-    r2.flush([{ id: 'id-200', resultado: 'sin-efecto', confirmadoEn: null, mensaje: 'La oficina anuló este estatus: error' }]);
+    r2.flush([{ id: 'id-200', resultado: 'sin-efecto', confirmadoEn: null, mensaje: 'La oficina anuló el estatus Documentado: faltó la carta porte. Puedes volver a reportarlo.' }]);
     expect(await p).toEqual([
       { id: 'id-0', resultado: 'confirmado', confirmadoEn: '2026-11-23T20:40:00Z', mensaje: null },
-      { id: 'id-200', resultado: 'sin-efecto', confirmadoEn: null, mensaje: 'La oficina anuló este estatus: error' },
+      { id: 'id-200', resultado: 'sin-efecto', confirmadoEn: null, mensaje: 'La oficina anuló el estatus Documentado: faltó la carta porte. Puedes volver a reportarlo.' },
     ]);
   });
 

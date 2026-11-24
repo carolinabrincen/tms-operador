@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
+import { ErrorApiOperador, OPERADOR_API } from '../api/operador-api';
 import { AsignacionService, claveCopiaAsignacion } from '../viaje/asignacion.service';
 import { AlmacenReportesIndexedDb } from '../reportes/almacen-reportes';
 import { ColaReportesService } from '../reportes/cola-reportes.service';
@@ -53,6 +54,27 @@ describe('SesionService: entrar y salir sin guardar el PIN', () => {
     expect(e.almacenLocal.getItem(claveCopiaAsignacion('ej-op-8112345678'))).toBeNull();
     expect(navegar).toHaveBeenCalledWith('/acceso');
     expect(await new AlmacenReportesIndexedDb(e.idb).todos()).toHaveLength(1);
+  });
+
+  it('salir: primero cierra la sesión en el servidor (con la sesión aún puesta) y después limpia el teléfono', async () => {
+    vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+    await sesion.entrar('8112345678', '123456');
+    let sesionAlCerrar: unknown = undefined;
+    vi.spyOn(TestBed.inject(OPERADOR_API), 'cerrarSesion').mockImplementation(async () => {
+      sesionAlCerrar = sesion.sesion();
+    });
+    await sesion.salir();
+    expect(sesionAlCerrar).toMatchObject({ operadorId: 'ej-op-8112345678' });
+    expect(sesion.sesion()).toBeNull();
+  });
+
+  it('salir sin señal (el cierre en el servidor falla): sale igual', async () => {
+    const navegar = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+    await sesion.entrar('8112345678', '123456');
+    vi.spyOn(TestBed.inject(OPERADOR_API), 'cerrarSesion').mockRejectedValue(new ErrorApiOperador('sin-conexion', 'Sin conexión.'));
+    await sesion.salir();
+    expect(sesion.sesion()).toBeNull();
+    expect(navegar).toHaveBeenCalledWith('/acceso');
   });
 });
 

@@ -3,8 +3,9 @@
 App del operador (chofer): ve su viaje en el celular, reporta el avance (estatus) y las incidencias. Web instalable
 (PWA); el mismo código se podrá empaquetar después para las tiendas.
 
-> **Paso 3:** ya existe la implementación de la API real (contrato M1, `docs/contrato-app-operador-m1.md`), pero la app
-> **sigue arrancando con datos de ejemplo** hasta que se decida lo contrario (`fuenteDatos` en `src/environments`).
+> **Paso 4:** ya existe la implementación de la API real (contrato M1, `docs/contrato-app-operador-m1.md`), con cierre de
+> sesión en el servidor y hitos anulados por oficina, pero la app **sigue arrancando con datos de ejemplo** hasta que se
+> decida lo contrario (`fuenteDatos` en `src/environments`).
 
 ## Requisitos
 
@@ -35,11 +36,18 @@ service worker, la ubicación y `crypto.randomUUID` no funcionan en `http://` sa
   `Cors:OrigenesOperador` y el navegador debe confiar en el certificado de desarrollo de .NET
   (`dotnet dev-certs https --trust`).
 - Sesión: PIN de 6 dígitos. Token y refresh se guardan en IndexedDB (nunca en pantalla, consola ni errores). Ante un 401
-  se renueva una vez y se repite; si renovar falla, se pide el PIN y la cola de reportes se conserva. Al salir se
-  borran token y refresh. La renovación va de una en una (también entre pestañas, con Web Locks), porque el refresh
+  se renueva una vez y se repite; si renovar falla, se pide el PIN y la cola de reportes se conserva.
+- Salir: se llama a `sesion/cerrar` con el refresh (cierra solo este teléfono) y después se borran token y refresh. Si no
+  hay señal, el servidor falla o tarda más de 4 s (`ESPERA_CIERRE_SESION_MS`), se borra igual: salir nunca se bloquea. La renovación va de una en una (también entre pestañas, con Web Locks), porque el refresh
   es rotativo y reusar uno cierra todas las sesiones del operador.
 - Errores del reporte (tabla 3.2): 400, 404 y 409 → "No aceptado"; 409 `DESPACHO_EVENTO_CLAVE_DUPLICADA` → otro id y
   se reenvía; 401 sin poder renovar y 403 → pedir el PIN; 429, 503 y 5xx → se reintenta.
+- Hitos anulados: la oficina puede anular un Documentado o Descargado ya confirmado. Los reportes confirmados se siguen
+  consultando mientras su salida esté activa; si pasan a "sin efecto" se muestra el mensaje del servidor y el paso se
+  vuelve a ofrecer (el nuevo reporte lleva otro id).
+- El `mensaje` del servidor (acuse y estado) ya viene legible y se muestra tal cual, sin traducir nada dentro.
+- Sin salida activa (`{ "salida": null }`, también cuando la oficina cierra o cancela la salida): Mi viaje dice "No tiene
+  un viaje activo" y "Mis reportes" conserva todo lo reportado.
 - La hora del reporte es la del teléfono: si va adelantada (el servidor rechaza más de 10 minutos), la app avisa desde
   los 5 minutos comparando con la hora del servidor de cada acuse.
 
@@ -59,7 +67,8 @@ service worker, la ubicación y `crypto.randomUUID` no funcionan en `http://` sa
   En "Otro" la nota es obligatoria. Viajan con los valores del backend (`DetenidoEnParador`, `IncidenciaMecanica`,
   `RetenOInspeccion`, `DesvioDeRuta`, `Otro`); igual los motivos de tramo (`CargaCombustible` → "Carga de combustible").
 - Estados del reporte: Pendiente de enviar, Enviado, Pendiente de confirmar por oficina, Confirmado, Descartado por
-  oficina (con su motivo) y No aceptado. El `mensaje` del servidor se muestra tal cual.
+  oficina (con su motivo) y No aceptado. Un Confirmado puede volver a "Enviado" sin efecto si la oficina anula el hito.
+  El `mensaje` del servidor se muestra tal cual.
 - Los textos de los botones están en `shared/utils/estatus-viaje.util.ts` (`BOTON_ESTATUS`).
 
 ## Datos de ejemplo
@@ -71,6 +80,8 @@ service worker, la ubicación y `crypto.randomUUID` no funcionan en `http://` sa
   - 30 s después de "Me están cargando" pone **Documentado ella misma** (si el operador no lo reportó);
   - 30 s después de Descargado confirmado, o de la llegada en vacío, cierra el viaje.
 - Un estatus igual o anterior al actual se recibe "sin efecto": queda registrado, pero el viaje no retrocede.
+- En pruebas, la "oficina" de ejemplo también puede anular un hito confirmado (`anularHito`) y cerrar la salida
+  (`cerrarSalida`); en la app de ejemplo no lo hace sola.
 - Las pantallas de viaje se releen solas cada 30 s con señal, y al enviarse un reporte o confirmarse un hito.
 - Con el teléfono sin señal (modo avión, o "Offline" en DevTools), los reportes quedan pendientes y se envían solos al
   volver la conexión.

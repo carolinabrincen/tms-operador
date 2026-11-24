@@ -43,7 +43,15 @@ describe('cola-reportes.util: reglas de la cola del teléfono', () => {
     const pendiente = local('p');
     const ajeno = { ...local('x', '2026-11-23T16:00:09Z', 'op2'), estado: 'enviado' as const };
     expect(porConsultar([hito, aplicado, sinEfecto, confirmado, pendiente, ajeno], 'op1').map((r) => r.id)).toEqual(['a', 'h']);
-    expect(porConsultar([hito, aplicado], 'op1', 1).map((r) => r.id)).toEqual(['a']);
+    expect(porConsultar([hito, aplicado], 'op1', new Set(), 1).map((r) => r.id)).toEqual(['a']);
+  });
+
+  it('por consultar: los confirmados se siguen preguntando mientras su salida esté activa (la oficina puede anular el hito)', () => {
+    const confirmado = { ...local('c'), estado: 'confirmado' as const, resultado: 'confirmado' as const };
+    const deOtraSalida = { ...local('o'), reporte: { ...reporte('o'), viajeId: 'v-vieja' }, estado: 'confirmado' as const };
+    expect(porConsultar([confirmado, deOtraSalida], 'op1', new Set(['v1'])).map((r) => r.id)).toEqual(['c']);
+    // Salida cerrada o cancelada (asignación sin salida): ya no se preguntan.
+    expect(porConsultar([confirmado, deOtraSalida], 'op1', new Set())).toEqual([]);
   });
 
   it('resultado del servidor → estado local', () => {
@@ -68,8 +76,8 @@ describe('cola-reportes.util: reglas de la cola del teléfono', () => {
 
   it('sin efecto: Enviado con el mensaje del servidor (o uno genérico); no cuenta como hecho', () => {
     const r = local('a');
-    const s = conEnvioExitoso(r, { id: 'a', recibidoEn: 't', resultado: 'sin-efecto', mensaje: 'La oficina ya registró EnTransito; el estatus no cambió.' }, 't1');
-    expect(s).toMatchObject({ estado: 'enviado', resultado: 'sin-efecto', mensaje: 'La oficina ya registró EnTransito; el estatus no cambió.' });
+    const s = conEnvioExitoso(r, { id: 'a', recibidoEn: 't', resultado: 'sin-efecto', mensaje: 'La oficina ya registró En tránsito; el estatus no cambió.' }, 't1');
+    expect(s).toMatchObject({ estado: 'enviado', resultado: 'sin-efecto', mensaje: 'La oficina ya registró En tránsito; el estatus no cambió.' });
     expect(cuentaComoHecho(s)).toBe(false);
     expect(conEnvioExitoso(r, { id: 'a', recibidoEn: 't', resultado: 'sin-efecto', mensaje: null }, 't1').mensaje).toBe('Recibido sin cambiar el estatus del viaje.');
   });
@@ -109,6 +117,14 @@ describe('cola-reportes.util: reglas de la cola del teléfono', () => {
       mensaje: 'La oficina anuló este estatus: error de captura',
     });
     expect(conEstadoRemoto(aplicado, { id: 'a', resultado: 'descartado', confirmadoEn: null, mensaje: 'La oficina descartó el reporte: x' }, 't9').estado).toBe('descartado');
+  });
+
+  it('hito anulado: un confirmado pasa a "sin efecto" con el mensaje del servidor tal cual, sin hora de confirmación, y ya no cuenta', () => {
+    const confirmado = { ...local('a'), estado: 'confirmado' as const, resultado: 'confirmado' as const, confirmadoEn: '2026-11-23T20:40:00Z' };
+    const mensaje = 'La oficina anuló el estatus Documentado: faltó la carta porte. Puedes volver a reportarlo.';
+    const anulado = conEstadoRemoto(confirmado, { id: 'a', resultado: 'sin-efecto', confirmadoEn: null, mensaje }, 't9');
+    expect(anulado).toMatchObject({ estado: 'enviado', resultado: 'sin-efecto', confirmadoEn: null, mensaje });
+    expect(cuentaComoHecho(anulado)).toBe(false);
   });
 
   it('estado remoto: no toca pendientes ni rechazados', () => {

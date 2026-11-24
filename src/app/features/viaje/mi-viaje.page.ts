@@ -55,6 +55,8 @@ export class MiViajePage implements OnInit {
   protected readonly viajes = computed(() => viajesEnOrden(this.salida()));
   protected readonly activo = computed(() => viajeActivo(this.salida(), this.cola.reportes()));
   protected readonly toca = computed(() => viajeQueToca(this.salida(), this.cola.reportes()));
+  /** Sin salida activa (la oficina la cerró o canceló) los reportes de antes siguen en "Mis reportes". */
+  protected readonly hayReportes = computed(() => this.cola.reportes().length > 0);
   protected readonly linea = computed(() => {
     const v = this.activo();
     return v ? lineaDeTiempo(v, this.cola.reportes()) : [];

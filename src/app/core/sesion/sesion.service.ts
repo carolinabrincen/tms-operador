@@ -26,14 +26,15 @@ export class SesionService {
   }
 
   /**
-   * Cierra la sesión: borra token y refresh, la copia del viaje y el perfil. Los reportes pendientes se quedan en el
-   * teléfono y se envían cuando ese operador vuelva a entrar.
+   * Cierra la sesión: avisa al servidor (solo esta sesión) y borra token y refresh, la copia del viaje y el perfil.
+   * La API limita la espera al servidor; sin señal se sale igual. Los reportes (pendientes y enviados) se quedan en
+   * el teléfono y los pendientes se envían cuando ese operador vuelva a entrar.
    */
   async salir(): Promise<void> {
     try {
       await this.api.cerrarSesion();
     } catch {
-      // Aunque falle el borrado, se sale igual (no hay nada que mostrar al operador).
+      // Aunque falle, se sale igual (no hay nada que mostrar al operador).
     }
     this.asignacion.olvidar(this.almacen.operadorId());
     this.almacen.limpiar();

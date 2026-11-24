@@ -28,6 +28,8 @@ export class App {
   protected readonly mensajes = inject(MensajesService);
   protected readonly esEjemplo = inject(OPERADOR_API).esEjemplo;
   protected readonly confirmandoSalida = signal(false);
+  /** Mientras se avisa al servidor que se cierra la sesión (unos segundos a lo más). */
+  protected readonly saliendo = signal(false);
   /** Hora del teléfono mal puesta: el servidor rechaza reportes con más de 10 minutos en el futuro. */
   protected readonly avisoReloj = inject(RelojTelefonoService).aviso;
   protected readonly textoPendientes = textoPendientes;
@@ -49,6 +51,12 @@ export class App {
 
   protected async salir(): Promise<void> {
     this.confirmandoSalida.set(false);
-    await this.sesionService.salir();
+    if (this.saliendo()) return;
+    this.saliendo.set(true);
+    try {
+      await this.sesionService.salir();
+    } finally {
+      this.saliendo.set(false);
+    }
   }
 }

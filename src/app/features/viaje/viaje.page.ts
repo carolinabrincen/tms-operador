@@ -27,6 +27,8 @@ export class ViajePage implements OnInit {
   protected readonly estadoCarga = this.asignacionSrv.estado;
   protected readonly ruta = origenDestino;
   protected readonly viaje = computed(() => this.asignacionSrv.asignacion()?.salida?.viajes.find((v) => v.id === this.id()) ?? null);
+  /** La asignación llegó sin salida: la oficina la cerró o la canceló. */
+  protected readonly sinSalida = computed(() => this.estadoCarga() === 'listo' && this.asignacionSrv.asignacion()?.salida === null);
   protected readonly toca = computed(() => viajeQueToca(this.asignacionSrv.asignacion()?.salida ?? null, this.cola.reportes()));
   /** Estatus efectivo (incluye lo que el operador ya reportó y el servidor aún no refleja). */
   protected readonly guiaViaje = computed(() => {

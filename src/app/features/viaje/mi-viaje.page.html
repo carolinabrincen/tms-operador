@@ -25,9 +25,12 @@
 
       <app-linea-tiempo [entradas]="linea()" />
     } @else {
-      <section class="tarjeta tarjeta-destacada" role="status">
+      <section class="tarjeta tarjeta-destacada sin-viaje" role="status">
         <h2>No tiene un viaje activo</h2>
         <p>Cuando la oficina le asigne uno, aparecerá aquí. Si cree que es un error, llame a la oficina.</p>
+        @if (hayReportes()) {
+          <a routerLink="/reportes" class="btn btn-secundario btn-bloque">Ver mis reportes</a>
+        }
       </section>
     }
 

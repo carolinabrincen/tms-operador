@@ -18,6 +18,7 @@ import { ConexionService } from '../conexion/conexion.service';
 import { NAVEGADOR, RELOJ } from '../plataforma';
 import { RelojTelefonoService } from '../reloj/reloj-telefono.service';
 import { AlmacenSesion, MENSAJE_SESION_VENCIDA } from '../sesion/almacen-sesion';
+import { AsignacionService } from '../viaje/asignacion.service';
 import { ALMACEN_REPORTES } from './almacen-reportes';
 import { ReporteLocal } from './reporte-local';
 
@@ -48,6 +49,7 @@ export class ColaReportesService {
   private readonly navegador = inject(NAVEGADOR);
   private readonly reloj = inject(RELOJ);
   private readonly relojTelefono = inject(RelojTelefonoService);
+  private readonly asignacion = inject(AsignacionService);
 
   private readonly todosSig = signal<ReporteLocal[]>([]);
   private readonly enviandoSig = signal(false);
@@ -69,7 +71,10 @@ export class ColaReportesService {
   /** Cuándo será el próximo reintento automático (ISO), o null. */
   readonly proximoReintento = this.reintentoSig.asReadonly();
   readonly persistente = () => this.almacen.persistente;
-  /** Sube cada vez que el servidor recibe un reporte o confirma un hito: las pantallas lo usan para releer el viaje. */
+  /**
+   * Sube cada vez que el servidor recibe un reporte o cambia su estado (confirma o anula un hito, descarta…): las
+   * pantallas lo usan para releer el viaje.
+   */
   readonly enviados = this.enviadosSig.asReadonly();
 
   constructor() {
@@ -134,13 +139,15 @@ export class ColaReportesService {
 
   /**
    * Pregunta al servidor el estado de lo enviado: la oficina confirma hitos, pero también puede anular un estatus ya
-   * aplicado ("sin efecto") o descartar un reporte. Sin conexión no hace nada.
+   * aplicado o un hito ya confirmado ("sin efecto") o descartar un reporte. Los confirmados se siguen preguntando
+   * mientras su salida esté activa (la de la última asignación conocida). Sin conexión no hace nada.
    */
   async actualizarEstados(): Promise<void> {
     await this.cargaInicial;
     const operadorId = this.sesion.operadorId();
     if (!operadorId || !this.conexion.enLinea()) return;
-    const esperando = porConsultar(this.todosSig(), operadorId);
+    const viajesActivos = new Set((this.asignacion.asignacion()?.salida?.viajes ?? []).map((v) => v.id));
+    const esperando = porConsultar(this.todosSig(), operadorId, viajesActivos);
     if (!esperando.length) return;
     try {
       const remotos = await this.api.consultarReportes(esperando.map((r) => r.id));

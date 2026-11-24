@@ -252,4 +252,45 @@ describe('OperadorApiEjemplo: implementación en memoria', () => {
     expect((await errorDe(c.api.enviarReporte(r))).tipo).toBe('rechazado');
     expect(await c.api.consultarReportes([r.id])).toEqual([]);
   });
+
+  it('la oficina anula un hito confirmado: el reporte queda "sin efecto" con mensaje legible, sale del historial y el viaje vuelve atrás', async () => {
+    const c = crear();
+    const op = await c.entrar();
+    await c.api.enviarReporte(estatus(CARGADO, 'EnCarga'));
+    const doc = estatus(CARGADO, 'Documentado');
+    await c.api.enviarReporte(doc);
+    c.avanzar(20_000);
+    expect((await c.viaje(CARGADO)).estatus).toBe('Documentado');
+    expect(c.api.anularHito(op, CARGADO, 'Descargado', 'x')).toBe(false); // no hay tal hito confirmado
+    expect(c.api.anularHito(op, CARGADO, 'Documentado', 'faltó la carta porte')).toBe(true);
+    const mensaje = 'La oficina anuló el estatus Documentado: faltó la carta porte. Puedes volver a reportarlo.';
+    expect(await c.api.consultarReportes([doc.id])).toEqual([{ id: doc.id, resultado: 'sin-efecto', confirmadoEn: null, mensaje }]);
+    expect(await c.api.enviarReporte(doc)).toMatchObject({ resultado: 'sin-efecto', mensaje }); // reenviar el mismo id: igual
+    const v = await c.viaje(CARGADO);
+    expect(v.estatus).toBe('EnCarga');
+    expect(v.historial.some((e) => e.reporteId === doc.id)).toBe(false);
+    // Se puede reportar otra vez, con otro id: queda por confirmar.
+    expect((await c.api.enviarReporte(estatus(CARGADO, 'Documentado'))).resultado).toBe('por-confirmar');
+  });
+
+  it('la oficina cierra la salida: asignación sin salida; un reporte tardío queda como historial ("sin efecto")', async () => {
+    const c = crear();
+    const op = await c.entrar();
+    expect((await c.api.obtenerAsignacion()).salida).not.toBeNull();
+    c.api.cerrarSalida(op);
+    expect(await c.api.obtenerAsignacion()).toEqual({ salida: null });
+    expect(await c.api.enviarReporte(estatus(CARGADO, 'EnCarga'))).toMatchObject({
+      resultado: 'sin-efecto',
+      mensaje: 'La salida SAL-2026-00418 ya estaba cerrada; quedó como historial.',
+    });
+  });
+
+  it('los mensajes van legibles, nunca con el valor técnico del estatus', async () => {
+    const c = crear();
+    await c.entrar();
+    await c.api.enviarReporte(estatus(CARGADO, 'EnTransito'));
+    const atrasado = await c.api.enviarReporte(estatus(CARGADO, 'EnCarga'));
+    expect(atrasado.mensaje).toBe('La oficina ya registró En tránsito; el estatus no cambió.');
+    expect(atrasado.mensaje).not.toContain('EnTransito');
+  });
 });

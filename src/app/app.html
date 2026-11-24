@@ -6,7 +6,9 @@
     }
   </span>
   @if (sesion()) {
-    <button type="button" class="btn btn-texto cabecera-salir" (click)="confirmandoSalida.set(true)">Salir</button>
+    <button type="button" class="btn btn-texto cabecera-salir" [disabled]="saliendo()" (click)="confirmandoSalida.set(true)">
+      {{ saliendo() ? 'Saliendo…' : 'Salir' }}
+    </button>
   }
 </header>
 
