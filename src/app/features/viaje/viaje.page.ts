@@ -5,15 +5,16 @@ import { AsignacionService } from '../../core/viaje/asignacion.service';
 import { activarRefrescoDelViaje } from '../../core/viaje/refresco-viaje';
 import { DatosViajeComponent } from '../../shared/ui/datos-viaje.component';
 import { EtiquetaEstatusComponent } from '../../shared/ui/etiqueta-estatus.component';
+import { EvidenciasViajeComponent } from '../../shared/ui/evidencias-viaje.component';
 import { LineaTiempoComponent } from '../../shared/ui/linea-tiempo.component';
 import { PanelAvanceComponent } from '../../shared/ui/panel-avance.component';
 import { guia, marcaDeGuia, origenDestino, viajeQueToca } from '../../shared/utils/estatus-viaje.util';
 import { lineaDeTiempo } from '../../shared/utils/linea-tiempo.util';
 
-/** Detalle de un viaje de la salida: estatus, pasos, incidencias, datos y línea de tiempo. Ruta /viaje/:id. */
+/** Detalle de un viaje de la salida: estatus, pasos, incidencias, datos, fotos (solo cargados) y línea de tiempo. Ruta /viaje/:id. */
 @Component({
   selector: 'app-viaje',
-  imports: [RouterLink, PanelAvanceComponent, DatosViajeComponent, LineaTiempoComponent, EtiquetaEstatusComponent],
+  imports: [RouterLink, PanelAvanceComponent, DatosViajeComponent, LineaTiempoComponent, EtiquetaEstatusComponent, EvidenciasViajeComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './viaje.page.html',
 })

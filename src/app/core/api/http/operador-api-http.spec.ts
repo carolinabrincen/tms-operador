@@ -3,7 +3,8 @@ import { HttpTestingController, TestRequest, provideHttpClientTesting } from '@a
 import { TestBed } from '@angular/core/testing';
 import { NAVEGADOR, NavegadorMinimo } from '../../plataforma';
 import { ALMACEN_CREDENCIALES, AlmacenCredencialesMemoria } from '../../sesion/almacen-credenciales';
-import { SALIDA_CARGADA, SALIDA_VACIA, SESION_API } from '../../../testing/respuestas-api';
+import { HOJA_RUTA_API, SALIDA_CARGADA, SALIDA_VACIA, SESION_API } from '../../../testing/respuestas-api';
+import { DatosEvidencia } from '../operador-api-m2.modelos';
 import { CODIGO_HORA_INVALIDA, ErrorApiOperador } from '../operador-api';
 import { ReporteOperador } from '../operador-api.modelos';
 import { CODIGO_CLAVE_DUPLICADA, CODIGO_SIN_ACCESO, MENSAJES } from './errores-api.util';
@@ -362,5 +363,163 @@ describe('OperadorApiHttp: la API real según el contrato M1', () => {
     for (const e of espias) expect(e).not.toHaveBeenCalled();
     const texto = `${err.message} ${JSON.stringify(err)} ${String(err.stack)}`;
     for (const secreto of ['482915', 'token-1', 'refresh-1']) expect(texto).not.toContain(secreto);
+  });
+
+  // ------------------------------------------------------------------ M2: hoja de ruta y evidencias
+
+  const DATOS_FOTO: DatosEvidencia = {
+    id: 'evi-1',
+    viajeId: 'via-1',
+    tipo: 'AcuseRecibido',
+    descripcion: null,
+    nota: 'Firmado',
+    reporteId: 'rep-desc',
+    tomadaEn: '2026-11-24T18:00:00Z',
+    ubicacion: { lat: 19.4326, lng: -99.1332, precisionM: 8.5, tomadoEn: '2026-11-24T17:59:58Z' },
+  };
+  const FOTO = () => new Blob([new Uint8Array([0xff, 0xd8, 0xff, 1])], { type: 'image/jpeg' });
+
+  it('hoja de ruta: GET hoja-ruta con el token; null sin salida activa', async () => {
+    await almacen.guardar(CRED_1);
+    const p = api.obtenerHojaRuta();
+    const req = await pedido('GET', 'hoja-ruta');
+    expect(req.request.headers.get('Authorization')).toBe('Bearer token-1');
+    req.flush(HOJA_RUTA_API);
+    expect((await p)!.folio).toBe('DSP-000123');
+    const p2 = api.obtenerHojaRuta();
+    (await pedido('GET', 'hoja-ruta')).flush({ hojaRuta: null });
+    expect(await p2).toBeNull();
+  });
+
+  it('subir evidencia: POST evidencias multipart con archivo y campos del contrato; 201 → acuse', async () => {
+    await almacen.guardar(CRED_1);
+    const p = api.subirEvidencia(FOTO(), DATOS_FOTO);
+    const req = await pedido('POST', 'evidencias');
+    const forma = req.request.body as FormData;
+    expect(forma).toBeInstanceOf(FormData);
+    expect(req.request.headers.get('Authorization')).toBe('Bearer token-1');
+    expect(req.request.headers.has('Content-Type')).toBe(false); // el navegador pone el multipart con su boundary
+    const campos = Object.fromEntries([...forma.entries()].filter(([k]) => k !== 'archivo'));
+    expect(campos).toEqual({
+      id: 'evi-1',
+      viajeId: 'via-1',
+      tipo: 'AcuseRecibido',
+      nota: 'Firmado',
+      reporteId: 'rep-desc',
+      tomadaEn: '2026-11-24T18:00:00Z',
+      lat: '19.4326',
+      lng: '-99.1332',
+      precisionM: '8.5',
+      ubicacionTomadaEn: '2026-11-24T17:59:58Z',
+    });
+    const archivo = forma.get('archivo') as File;
+    expect(archivo.name).toBe('evi-1.jpg');
+    expect(archivo.type).toBe('image/jpeg');
+    req.flush({ id: 'evi-1', recibidaEn: '2026-11-24T18:00:03Z', mensaje: 'Recibida: Acuse de recibido.' }, { status: 201, statusText: 'Created' });
+    expect(await p).toEqual({ id: 'evi-1', recibidaEn: '2026-11-24T18:00:03Z', mensaje: 'Recibida: Acuse de recibido.' });
+  });
+
+  it('subir evidencia: reintento con el mismo id → 200 con el mismo acuse', async () => {
+    await almacen.guardar(CRED_1);
+    const p = api.subirEvidencia(FOTO(), DATOS_FOTO);
+    const req = await pedido('POST', 'evidencias');
+    expect((req.request.body as FormData).get('id')).toBe('evi-1');
+    req.flush({ id: 'evi-1', recibidaEn: '2026-11-24T18:00:03Z', mensaje: 'Recibida: Acuse de recibido.' }, { status: 200, statusText: 'OK' });
+    expect((await p).id).toBe('evi-1');
+  });
+
+  it('subir evidencia con 401: renueva una vez y repite el multipart con el token nuevo', async () => {
+    await almacen.guardar(CRED_1);
+    const p = api.subirEvidencia(FOTO(), DATOS_FOTO);
+    falla(await pedido('POST', 'evidencias'), 401);
+    (await pedido('POST', 'sesion/renovar')).flush(RENOVADA);
+    const otra = await pedido('POST', 'evidencias');
+    expect(otra.request.headers.get('Authorization')).toBe('Bearer token-2');
+    expect((otra.request.body as FormData).get('archivo')).toBeTruthy();
+    otra.flush({ id: 'evi-1', recibidaEn: 't', mensaje: null }, { status: 201, statusText: 'Created' });
+    expect((await p).id).toBe('evi-1');
+  });
+
+  for (const [status, codigo, tipo] of [
+    [409, 'VIAJE_EVIDENCIA_CLAVE_DUPLICADA', 'id-duplicado'],
+    [404, 'OPERADOR_VIAJE_NO_ENCONTRADO', 'rechazado'],
+    [409, 'OPERADOR_SALIDA_CERRADA', 'rechazado'],
+    [409, 'VIAJE_EVIDENCIA_ESTADO_INVALIDO', 'rechazado'],
+    [400, 'VIAJE_EVIDENCIA_ARCHIVO_INVALIDO', 'rechazado'],
+    [400, 'VIAJE_EVIDENCIA_DEMASIADO_GRANDE', 'rechazado'],
+    [400, 'VIAJE_EVIDENCIA_LIMITE', 'rechazado'],
+    [400, 'VIAJE_EVIDENCIA_INVALIDA', 'rechazado'],
+    [429, undefined, 'limite'],
+    [503, undefined, 'servidor'],
+  ] as const) {
+    it(`subir evidencia: ${status} ${codigo ?? ''} → ${tipo}, con su código`, async () => {
+      await almacen.guardar(CRED_1);
+      const p = api.subirEvidencia(FOTO(), DATOS_FOTO);
+      falla(await pedido('POST', 'evidencias'), status, codigo);
+      expect(await errorDe(p)).toMatchObject({ tipo, codigo: codigo ?? null, status });
+    });
+  }
+
+  it('los 400 de regla de evidencias llegan como { status, message, codigo }: se usa `message`', async () => {
+    await almacen.guardar(CRED_1);
+    const p = api.subirEvidencia(FOTO(), DATOS_FOTO);
+    (await pedido('POST', 'evidencias')).flush(
+      { status: 400, message: 'La descripción es obligatoria con Otro.', codigo: 'VIAJE_EVIDENCIA_INVALIDA' },
+      { status: 400, statusText: 'Bad Request' },
+    );
+    expect(await errorDe(p)).toMatchObject({ tipo: 'rechazado', codigo: 'VIAJE_EVIDENCIA_INVALIDA', message: 'La descripción es obligatoria con Otro.' });
+  });
+
+  it('estado de evidencias: POST evidencias/estado con los ids, de 200 en 200', async () => {
+    await almacen.guardar(CRED_1);
+    const ids = Array.from({ length: 201 }, (_, i) => `e-${i}`);
+    const p = api.consultarEvidencias(ids);
+    const r1 = await pedido('POST', 'evidencias/estado');
+    expect(r1.request.body.ids).toHaveLength(200);
+    r1.flush([{ id: 'e-0', estado: 'recibida', motivo: null }]);
+    const r2 = await pedido('POST', 'evidencias/estado');
+    expect(r2.request.body).toEqual({ ids: ['e-200'] });
+    r2.flush([{ id: 'e-200', estado: 'anulada', motivo: 'La oficina anuló la evidencia: borrosa' }]);
+    expect(await p).toEqual([
+      { id: 'e-0', estado: 'recibida', motivo: null },
+      { id: 'e-200', estado: 'anulada', motivo: 'La oficina anuló la evidencia: borrosa' },
+    ]);
+  });
+
+  it('galería: GET evidencias?viajeId= con el token', async () => {
+    await almacen.guardar(CRED_1);
+    const p = api.evidenciasDeViaje('via 1');
+    let req!: TestRequest;
+    await vi.waitFor(() => {
+      req = http.expectOne((r) => r.method === 'GET' && r.url === `${BASE}/evidencias` && r.params.get('viajeId') === 'via 1');
+    });
+    expect(req.request.headers.get('Authorization')).toBe('Bearer token-1');
+    req.flush([
+      { id: 'a', viajeId: 'via 1', tipo: 'Sellos', descripcion: null, nota: null, contentType: 'image/jpeg', tamanoBytes: 9, subidaEn: 't', tomadaEn: null, autor: 'operador' },
+      { id: 'b', viajeId: 'via 1', tipo: 'Remision', descripcion: null, nota: null, contentType: 'application/pdf', tamanoBytes: 9, subidaEn: 't', tomadaEn: null, autor: 'oficina' },
+    ]);
+    expect((await p).map((e) => e.autor)).toEqual(['operador', 'oficina']);
+  });
+
+  it('archivo de una foto suya: GET evidencias/{id}/archivo con el token, como blob (sin ligas públicas)', async () => {
+    await almacen.guardar(CRED_1);
+    const p = api.archivoEvidencia('evi-1');
+    const req = await pedido('GET', 'evidencias/evi-1/archivo');
+    expect(req.request.responseType).toBe('blob');
+    expect(req.request.headers.get('Authorization')).toBe('Bearer token-1');
+    req.flush(new Blob([new Uint8Array([0xff, 0xd8, 0xff])], { type: 'image/jpeg' }));
+    const blob = await p;
+    expect(blob).toBeInstanceOf(Blob);
+    expect(blob!.size).toBe(3);
+  });
+
+  it('archivo de la oficina, anulada o ajena: 404 → null (no es un error)', async () => {
+    await almacen.guardar(CRED_1);
+    const p = api.archivoEvidencia('de-oficina');
+    (await pedido('GET', 'evidencias/de-oficina/archivo')).flush(new Blob([]), { status: 404, statusText: 'Not Found' });
+    expect(await p).toBeNull();
+    const p2 = api.archivoEvidencia('x');
+    (await pedido('GET', 'evidencias/x/archivo')).flush(new Blob([]), { status: 500, statusText: 'Error' });
+    expect((await errorDe(p2)).tipo).toBe('servidor');
   });
 });

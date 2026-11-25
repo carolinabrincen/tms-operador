@@ -4,12 +4,14 @@ import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/rou
 import { OPERADOR_API } from './core/api/operador-api';
 import { MARCA } from './core/config/marca';
 import { ConexionService } from './core/conexion/conexion.service';
+import { ColaEvidenciasService } from './core/evidencias/cola-evidencias.service';
 import { MensajesService } from './core/mensajes/mensajes.service';
 import { RelojTelefonoService } from './core/reloj/reloj-telefono.service';
 import { ColaReportesService } from './core/reportes/cola-reportes.service';
 import { AlmacenSesion } from './core/sesion/almacen-sesion';
 import { SesionService } from './core/sesion/sesion.service';
 import { textoPendientes } from './shared/utils/cola-reportes.util';
+import { textoFotosPendientes } from './shared/utils/evidencias.util';
 
 @Component({
   selector: 'app-root',
@@ -25,6 +27,7 @@ export class App {
   protected readonly sesion = inject(AlmacenSesion).sesion;
   protected readonly enLinea = inject(ConexionService).enLinea;
   protected readonly cola = inject(ColaReportesService);
+  protected readonly fotos = inject(ColaEvidenciasService);
   protected readonly mensajes = inject(MensajesService);
   protected readonly esEjemplo = inject(OPERADOR_API).esEjemplo;
   protected readonly confirmandoSalida = signal(false);
@@ -33,6 +36,7 @@ export class App {
   /** Hora del teléfono mal puesta: el servidor rechaza reportes con más de 10 minutos en el futuro. */
   protected readonly avisoReloj = inject(RelojTelefonoService).aviso;
   protected readonly textoPendientes = textoPendientes;
+  protected readonly textoFotosPendientes = textoFotosPendientes;
 
   constructor() {
     inject(Title).setTitle(MARCA.nombre);

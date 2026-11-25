@@ -54,4 +54,15 @@ describe('errores-api.util: errores por status y código (contrato M1, tabla 3.2
     expect(e.message).toBe(MENSAJES.rechazado);
     expect(JSON.stringify(e)).not.toContain('token-secreto');
   });
+
+  it('M2: 409 VIAJE_EVIDENCIA_CLAVE_DUPLICADA → id-duplicado; los 400 de regla traen `message` en vez de `detail`', () => {
+    expect(clasificarError(409, { codigo: 'VIAJE_EVIDENCIA_CLAVE_DUPLICADA' }, 'general')).toMatchObject({ tipo: 'id-duplicado', codigo: 'VIAJE_EVIDENCIA_CLAVE_DUPLICADA' });
+    expect(clasificarError(400, { status: 400, message: 'Foto demasiado grande.', codigo: 'VIAJE_EVIDENCIA_DEMASIADO_GRANDE' }, 'general')).toMatchObject({
+      tipo: 'rechazado',
+      message: 'Foto demasiado grande.',
+      codigo: 'VIAJE_EVIDENCIA_DEMASIADO_GRANDE',
+    });
+    // Un cuerpo que no es JSON (p. ej. el Blob de un archivo que no existe): se decide por el status.
+    expect(clasificarError(404, new Blob([]), 'general')).toMatchObject({ tipo: 'rechazado', status: 404 });
+  });
 });

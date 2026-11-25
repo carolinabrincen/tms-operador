@@ -1,6 +1,7 @@
 import { DOCUMENT } from '@angular/common';
 import { DestroyRef, effect, inject, untracked } from '@angular/core';
 import { ConexionService } from '../conexion/conexion.service';
+import { ColaEvidenciasService } from '../evidencias/cola-evidencias.service';
 import { ColaReportesService } from '../reportes/cola-reportes.service';
 import { AsignacionService } from './asignacion.service';
 
@@ -14,6 +15,7 @@ export const REFRESCO_VIAJE_MS = 30_000;
 export function activarRefrescoDelViaje(): void {
   const asignacion = inject(AsignacionService);
   const cola = inject(ColaReportesService);
+  const fotos = inject(ColaEvidenciasService);
   const conexion = inject(ConexionService);
   const documento = inject(DOCUMENT);
 
@@ -28,6 +30,7 @@ export function activarRefrescoDelViaje(): void {
   const temporizador = setInterval(() => {
     if (!conexion.enLinea() || documento.visibilityState !== 'visible') return;
     void cola.actualizarEstados();
+    void fotos.actualizarEstados();
     void asignacion.cargar();
   }, REFRESCO_VIAJE_MS);
   inject(DestroyRef).onDestroy(() => clearInterval(temporizador));

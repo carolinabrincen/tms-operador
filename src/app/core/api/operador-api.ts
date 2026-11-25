@@ -1,10 +1,11 @@
 import { InjectionToken } from '@angular/core';
+import { AcuseEvidencia, DatosEvidencia, EstadoRemotoEvidencia, EvidenciaViaje, HojaRuta } from './operador-api-m2.modelos';
 import { AcuseReporte, AsignacionOperador, EstadoRemotoReporte, ReporteOperador, SesionOperador } from './operador-api.modelos';
 
 /**
  * ÚNICA puerta a la API del operador. Dos implementaciones, elegidas por environment.fuenteDatos:
  *  - OperadorApiEjemplo ('ejemplo'): en memoria.
- *  - OperadorApiHttp ('api'): la API real según el contrato M1.
+ *  - OperadorApiHttp ('api'): la API real según los contratos M1 (sesión, viaje, reportes) y M2 (hoja de ruta, evidencias).
  *
  * Las credenciales (token y refresh) las maneja cada implementación por dentro: nunca salen de ella, ni a pantallas
  * ni a la consola. Errores: toda implementación rechaza con ErrorApiOperador, para que la cola sepa qué hacer.
@@ -33,6 +34,26 @@ export interface OperadorApi {
 
   /** Estado actual de reportes ya enviados. Los ids que el servidor no conozca no se devuelven. */
   consultarReportes(ids: string[]): Promise<EstadoRemotoReporte[]>;
+
+  // ------------------------------------------------------------ M2
+
+  /** Hoja de ruta de su salida activa; null sin salida activa. Nunca lleva importes. */
+  obtenerHojaRuta(): Promise<HojaRuta | null>;
+
+  /**
+   * Sube una foto (ya reducida) de un viaje cargado. IDEMPOTENTE por datos.id con la misma foto; el mismo id con otra
+   * foto rechaza con 'id-duplicado' (hay que generar otro id).
+   */
+  subirEvidencia(foto: Blob, datos: DatosEvidencia): Promise<AcuseEvidencia>;
+
+  /** Estado de fotos ya subidas (recibida o anulada). Las que no llegaron no se devuelven: hay que reenviarlas. */
+  consultarEvidencias(ids: string[]): Promise<EstadoRemotoEvidencia[]>;
+
+  /** Evidencias vigentes de un viaje: las suyas y las de la oficina (estas solo como aviso, sin archivo). */
+  evidenciasDeViaje(viajeId: string): Promise<EvidenciaViaje[]>;
+
+  /** Archivo de una foto SUYA. null si el servidor no la da (404: de la oficina, anulada o ajena); no es un error. */
+  archivoEvidencia(id: string): Promise<Blob | null>;
 }
 
 export const OPERADOR_API = new InjectionToken<OperadorApi>('OPERADOR_API');
@@ -43,8 +64,9 @@ export const OPERADOR_API = new InjectionToken<OperadorApi>('OPERADOR_API');
  *  - servidor: el servidor falló (5xx, 503 en mantenimiento). Se reintenta con espera creciente.
  *  - limite: demasiadas peticiones (429). Se reintenta más tarde; en el acceso: esperar 15 minutos.
  *  - sesion: credenciales inválidas, sesión vencida que no se pudo renovar, o sin acceso (403). Pedir el PIN.
- *  - rechazado: el servidor no acepta el reporte (400, 404, 409). No se reintenta: "No aceptado".
- *  - id-duplicado: ese id de reporte ya lo usó otro operador (409). Generar otro id y reenviar.
+ *  - rechazado: el servidor no acepta el reporte o la foto (400, 404, 409). No se reintenta: "No aceptado".
+ *  - id-duplicado: ese id ya lo usó otro operador (reporte) o se usó con otra foto (evidencia) (409). Generar otro id
+ *    y reenviar.
  */
 export type TipoErrorApi = 'sin-conexion' | 'servidor' | 'limite' | 'sesion' | 'rechazado' | 'id-duplicado';
 
@@ -69,3 +91,15 @@ export function comoErrorApi(error: unknown): ErrorApiOperador {
 
 /** Código del contrato para un reporte con la hora del teléfono en el futuro. */
 export const CODIGO_HORA_INVALIDA = 'DESPACHO_EVENTO_HORA_INVALIDA';
+
+/** Códigos de error de evidencias (contrato M2, 2.1). */
+export const CODIGOS_EVIDENCIA = {
+  claveDuplicada: 'VIAJE_EVIDENCIA_CLAVE_DUPLICADA',
+  viajeNoEncontrado: 'OPERADOR_VIAJE_NO_ENCONTRADO',
+  salidaCerrada: 'OPERADOR_SALIDA_CERRADA',
+  estadoInvalido: 'VIAJE_EVIDENCIA_ESTADO_INVALIDO',
+  archivoInvalido: 'VIAJE_EVIDENCIA_ARCHIVO_INVALIDO',
+  demasiadoGrande: 'VIAJE_EVIDENCIA_DEMASIADO_GRANDE',
+  limite: 'VIAJE_EVIDENCIA_LIMITE',
+  invalida: 'VIAJE_EVIDENCIA_INVALIDA',
+} as const;

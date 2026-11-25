@@ -1,4 +1,6 @@
 import { ErrorApiOperador } from '../operador-api';
+import { DatosEvidencia } from '../operador-api-m2.modelos';
+import { fotoJpeg } from '../../../testing/entorno-pruebas';
 import { EstatusViaje, ReporteEstatus, ReporteIncidencia, Viaje } from '../operador-api.modelos';
 import { OperadorApiEjemplo, OpcionesEjemplo } from './operador-api-ejemplo';
 
@@ -292,5 +294,91 @@ describe('OperadorApiEjemplo: implementación en memoria', () => {
     const atrasado = await c.api.enviarReporte(estatus(CARGADO, 'EnCarga'));
     expect(atrasado.mensaje).toBe('La oficina ya registró En tránsito; el estatus no cambió.');
     expect(atrasado.mensaje).not.toContain('EnTransito');
+  });
+});
+
+describe('OperadorApiEjemplo M2: hoja de ruta y evidencias', () => {
+  const datos = (id: string, extra: Partial<DatosEvidencia> = {}): DatosEvidencia => ({
+    id,
+    viajeId: CARGADO,
+    tipo: 'Sellos',
+    descripcion: null,
+    nota: null,
+    reporteId: null,
+    tomadaEn: null,
+    ubicacion: null,
+    ...extra,
+  });
+
+  it('hoja de ruta de la salida: 4 tramos en orden, teléfonos, ligaMapa https, material peligroso; sin salida: null', async () => {
+    const c = crear();
+    await c.entrar();
+    const h = (await c.api.obtenerHojaRuta())!;
+    expect(h.folio).toBe('SAL-2026-00418');
+    expect(h.itinerario.map((t) => `${t.orden}:${t.tipo}`)).toEqual(['1:vacio', '2:cargado', '3:cargado', '4:vacio']);
+    expect(h.telefonoTrafico).toBeTruthy();
+    expect(h.itinerario[1].ruta!.ligaMapa).toMatch(/^https:\/\//);
+    expect(h.itinerario[2].materialPeligroso).toBe(true);
+    await c.entrar('8112340000');
+    expect(await c.api.obtenerHojaRuta()).toBeNull();
+  });
+
+  it('GUARDA DE DINERO: la hoja de ruta y las evidencias de ejemplo no tienen tarifas, importes, casetas en pesos, diésel ni pagos', async () => {
+    const c = crear();
+    await c.entrar();
+    const PROHIBIDOS = new RegExp(`${CAMPOS_PROHIBIDOS.source}|pesos|diesel|diésel`, 'i');
+    const hoja = await c.api.obtenerHojaRuta();
+    expect(llaves(hoja).filter((k) => PROHIBIDOS.test(k))).toEqual([]);
+    await c.api.subirEvidencia(fotoJpeg(1), datos('e1'));
+    const lista = await c.api.evidenciasDeViaje(CARGADO);
+    expect(llaves(lista).filter((k) => PROHIBIDOS.test(k))).toEqual([]);
+    expect(llaves(await c.api.consultarEvidencias(['e1'])).filter((k) => PROHIBIDOS.test(k))).toEqual([]);
+  });
+
+  it('subir: acuse con mensaje; reintento con el mismo id y la misma foto = mismo acuse, sin otra copia', async () => {
+    const c = crear();
+    await c.entrar();
+    const a1 = await c.api.subirEvidencia(fotoJpeg(1), datos('e1', { tipo: 'AcuseRecibido' }));
+    expect(a1).toEqual({ id: 'e1', recibidaEn: '2026-11-23T16:00:00Z', mensaje: 'Recibida: Acuse de recibido.' });
+    c.avanzar(60_000);
+    expect(await c.api.subirEvidencia(fotoJpeg(1), datos('e1', { tipo: 'AcuseRecibido' }))).toEqual(a1);
+    expect((await c.api.evidenciasDeViaje(CARGADO)).filter((e) => e.autor === 'operador')).toHaveLength(1);
+  });
+
+  it('el mismo id con OTRA foto: 409 VIAJE_EVIDENCIA_CLAVE_DUPLICADA (id-duplicado)', async () => {
+    const c = crear();
+    await c.entrar();
+    await c.api.subirEvidencia(fotoJpeg(1), datos('e1'));
+    expect(await errorDe(c.api.subirEvidencia(fotoJpeg(2), datos('e1')))).toMatchObject({ tipo: 'id-duplicado', codigo: 'VIAJE_EVIDENCIA_CLAVE_DUPLICADA', status: 409 });
+  });
+
+  it('reglas del contrato: vacío, viaje ajeno, Otro sin descripción, no JPG/PNG, más de 5 MB, 30 por viaje', async () => {
+    const c = crear();
+    await c.entrar();
+    const codigo = async (p: Promise<unknown>) => (await errorDe(p)).codigo;
+    expect(await codigo(c.api.subirEvidencia(fotoJpeg(), datos('x1', { viajeId: VACIO_PATIO })))).toBe('VIAJE_EVIDENCIA_INVALIDA');
+    expect(await codigo(c.api.subirEvidencia(fotoJpeg(), datos('x2', { viajeId: 'ajeno' })))).toBe('OPERADOR_VIAJE_NO_ENCONTRADO');
+    expect(await codigo(c.api.subirEvidencia(fotoJpeg(), datos('x3', { tipo: 'Otro' })))).toBe('VIAJE_EVIDENCIA_INVALIDA');
+    expect(await codigo(c.api.subirEvidencia(new Blob(['%PDF-1.7'], { type: 'application/pdf' }), datos('x4')))).toBe('VIAJE_EVIDENCIA_ARCHIVO_INVALIDO');
+    expect(await codigo(c.api.subirEvidencia(fotoJpeg(1, 5 * 1024 * 1024 + 1), datos('x5')))).toBe('VIAJE_EVIDENCIA_DEMASIADO_GRANDE');
+    // La de la oficina también cuenta como vigente: con 29 del operador ya son 30.
+    for (let i = 0; i < 29; i++) await c.api.subirEvidencia(fotoJpeg(i), datos(`ok${i}`));
+    expect(await codigo(c.api.subirEvidencia(fotoJpeg(99), datos('x6')))).toBe('VIAJE_EVIDENCIA_LIMITE');
+  });
+
+  it('galería: las suyas y las de la oficina; el archivo de la oficina, anulada o ajena = null (404), no error', async () => {
+    const c = crear();
+    await c.entrar();
+    await c.api.subirEvidencia(fotoJpeg(3), datos('e1'));
+    const lista = await c.api.evidenciasDeViaje(CARGADO);
+    expect(lista.map((e) => `${e.autor}:${e.tipo}`).sort()).toEqual(['oficina:CartaPorteFirmada', 'operador:Sellos']);
+    const archivo = await c.api.archivoEvidencia('e1');
+    expect(archivo!.type).toBe('image/jpeg');
+    expect(archivo!.size).toBe(64);
+    expect(await c.api.archivoEvidencia('ej-evi-oficina-1')).toBeNull();
+    c.api.anularEvidencia('e1', 'borrosa');
+    expect(await c.api.archivoEvidencia('e1')).toBeNull();
+    expect(await c.api.consultarEvidencias(['e1', 'no-llego'])).toEqual([{ id: 'e1', estado: 'anulada', motivo: 'La oficina anuló la evidencia: borrosa' }]);
+    expect((await c.api.evidenciasDeViaje(CARGADO)).map((e) => e.autor)).toEqual(['oficina']);
   });
 });

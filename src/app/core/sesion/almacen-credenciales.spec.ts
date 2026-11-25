@@ -31,8 +31,8 @@ describe('AlmacenCredenciales: token y refresh en IndexedDB', () => {
     expect((await m.leer())!.token).toBe('t');
   });
 
-  it('pasar de la base del paso 2 (versión 2) a la 3 conserva la cola de reportes', async () => {
-    expect(VERSION_BD).toBe(3);
+  it('pasar de la base del paso 2 (versión 2) a la actual conserva la cola de reportes', async () => {
+    expect(VERSION_BD).toBe(4);
     const idb = new IDBFactory();
     await new Promise<void>((listo) => {
       const req = idb.open(NOMBRE_BD, 2);

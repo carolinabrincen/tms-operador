@@ -1,10 +1,11 @@
-import { HttpClient, HttpErrorResponse, HttpHeaders } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse, HttpHeaders, HttpParams } from '@angular/common/http';
 import { InjectionToken, inject } from '@angular/core';
 import { Observable, Subject, firstValueFrom, takeUntil } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 import { NAVEGADOR } from '../../plataforma';
 import { ALMACEN_CREDENCIALES } from '../../sesion/almacen-credenciales';
 import { ErrorApiOperador, OperadorApi } from '../operador-api';
+import { AcuseEvidencia, DatosEvidencia, EstadoRemotoEvidencia, EvidenciaViaje, HojaRuta } from '../operador-api-m2.modelos';
 import { AcuseReporte, AsignacionOperador, EstadoRemotoReporte, ReporteOperador, SesionOperador } from '../operador-api.modelos';
 import { ContextoPeticion, MENSAJES, clasificarError } from './errores-api.util';
 import {
@@ -16,6 +17,14 @@ import {
   reporteParaApi,
   sesionDesdeApi,
 } from './mapeo-api.util';
+import {
+  acuseEvidenciaDesdeApi,
+  camposEvidencia,
+  estadosEvidenciaDesdeApi,
+  evidenciasDeViajeDesdeApi,
+  hojaRutaDesdeApi,
+  nombreArchivoEvidencia,
+} from './mapeo-m2-api.util';
 
 /** Base de la API (la misma de la oficina, con /api). Las rutas del operador cuelgan de `${base}/operador`. */
 export const API_URL = new InjectionToken<string>('API_URL', { providedIn: 'root', factory: () => environment.apiUrl });
@@ -31,8 +40,16 @@ export const ESPERA_CIERRE_SESION_MS = new InjectionToken<number>('ESPERA_CIERRE
 
 type Metodo = 'GET' | 'POST';
 
+interface OpcionesPeticion {
+  /** Al emitir, la petición se cancela (cuenta como sin conexión). */
+  cancelar?: Observable<void>;
+  params?: Record<string, string>;
+  /** La respuesta es un archivo (Blob), no JSON. */
+  archivo?: boolean;
+}
+
 /**
- * Implementación REAL de OperadorApi (contrato M1).
+ * Implementación REAL de OperadorApi (contratos M1 y M2).
  *
  * Sesión:
  *  - Login y renovación guardan token y refresh en IndexedDB (AlmacenCredenciales). Nunca salen de aquí: no se
@@ -100,6 +117,44 @@ export class OperadorApiHttp implements OperadorApi {
     return estados;
   }
 
+  // ------------------------------------------------------------------ M2: hoja de ruta y evidencias
+
+  async obtenerHojaRuta(): Promise<HojaRuta | null> {
+    return hojaRutaDesdeApi(await this.autorizada('GET', 'hoja-ruta'));
+  }
+
+  /** multipart/form-data: `archivo` y los campos de texto (2.1). 201 y 200 (reintento) dan el mismo acuse. */
+  async subirEvidencia(foto: Blob, datos: DatosEvidencia): Promise<AcuseEvidencia> {
+    const forma = new FormData();
+    for (const [k, v] of camposEvidencia(datos)) forma.append(k, v);
+    forma.append('archivo', foto, nombreArchivoEvidencia(datos.id, foto.type));
+    return acuseEvidenciaDesdeApi(await this.autorizada('POST', 'evidencias', forma));
+  }
+
+  async consultarEvidencias(ids: string[]): Promise<EstadoRemotoEvidencia[]> {
+    const estados: EstadoRemotoEvidencia[] = [];
+    for (let i = 0; i < ids.length; i += MAX_IDS_ESTADO) {
+      const lote = ids.slice(i, i + MAX_IDS_ESTADO);
+      estados.push(...estadosEvidenciaDesdeApi(await this.autorizada('POST', 'evidencias/estado', { ids: lote })));
+    }
+    return estados;
+  }
+
+  async evidenciasDeViaje(viajeId: string): Promise<EvidenciaViaje[]> {
+    return evidenciasDeViajeDesdeApi(await this.autorizada('GET', 'evidencias', undefined, { params: { viajeId } }));
+  }
+
+  /** Con el token (no hay ligas públicas). 404 = de la oficina, anulada o ajena: no es un error, no hay imagen. */
+  async archivoEvidencia(id: string): Promise<Blob | null> {
+    try {
+      const archivo = await this.autorizada('GET', `evidencias/${encodeURIComponent(id)}/archivo`, undefined, { archivo: true });
+      return archivo instanceof Blob ? archivo : null;
+    } catch (e) {
+      if (e instanceof ErrorApiOperador && e.status === 404) return null;
+      throw e;
+    }
+  }
+
   // ------------------------------------------------------------------ internos
 
   /** POST sesion/cerrar con el refresh guardado. Si hay una renovación en curso, se espera (el refresh cambia). */
@@ -107,21 +162,21 @@ export class OperadorApiHttp implements OperadorApi {
     await this.renovando?.catch(() => undefined);
     const credenciales = await this.almacen.leer();
     if (!credenciales) return;
-    await this.peticion('POST', 'sesion/cerrar', { refreshToken: credenciales.refreshToken }, null, 'renovar', cancelar);
+    await this.peticion('POST', 'sesion/cerrar', { refreshToken: credenciales.refreshToken }, null, 'renovar', { cancelar });
   }
 
   /** Petición con token. 401 → renovar una vez y repetir; si vuelve el 401, 'sesion'. */
-  private async autorizada(metodo: Metodo, ruta: string, cuerpo?: unknown): Promise<unknown> {
+  private async autorizada(metodo: Metodo, ruta: string, cuerpo?: unknown, opciones: OpcionesPeticion = {}): Promise<unknown> {
     const guardadas = await this.almacen.leer();
     // Sin token (p. ej. se perdió): se intenta con el refresh antes de molestar al operador.
     const credenciales = guardadas ?? (await this.renovar(null));
     try {
-      return await this.peticion(metodo, ruta, cuerpo, credenciales.token, 'general');
+      return await this.peticion(metodo, ruta, cuerpo, credenciales.token, 'general', opciones);
     } catch (e) {
       if (!(e instanceof ErrorApiOperador) || e.status !== 401) throw e;
     }
     const nuevas = await this.renovar(credenciales.token);
-    return this.peticion(metodo, ruta, cuerpo, nuevas.token, 'general');
+    return this.peticion(metodo, ruta, cuerpo, nuevas.token, 'general', opciones);
   }
 
   /** Una sola renovación a la vez. `tokenQueFallo`: el token que recibió el 401 (null si no había). */
@@ -160,12 +215,17 @@ export class OperadorApiHttp implements OperadorApi {
     cuerpo: unknown,
     token: string | null,
     contexto: ContextoPeticion,
-    cancelar?: Observable<void>,
+    { cancelar, params, archivo }: OpcionesPeticion = {},
   ): Promise<unknown> {
     let headers = new HttpHeaders();
     if (token) headers = headers.set('Authorization', `Bearer ${token}`);
     const url = `${this.base}/${ruta}`;
-    const solicitud = metodo === 'GET' ? this.http.get<unknown>(url, { headers }) : this.http.post<unknown>(url, cuerpo ?? {}, { headers });
+    const httpParams = params ? new HttpParams({ fromObject: params }) : undefined;
+    const solicitud: Observable<unknown> = archivo
+      ? this.http.get(url, { headers, params: httpParams, responseType: 'blob' })
+      : metodo === 'GET'
+        ? this.http.get<unknown>(url, { headers, params: httpParams })
+        : this.http.post<unknown>(url, cuerpo ?? {}, { headers }); // FormData: el navegador pone el multipart
     try {
       // Cancelada antes de responder = sin conexión.
       return await firstValueFrom(cancelar ? solicitud.pipe(takeUntil(cancelar)) : solicitud);

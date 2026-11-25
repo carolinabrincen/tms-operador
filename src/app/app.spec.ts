@@ -18,16 +18,17 @@ describe('App (armazón)', () => {
     expect(el.querySelector('nav.menu')).toBeNull();
   });
 
-  it('con sesión: menú con Evidencias y Gastos marcados "Próximamente" que avisan al tocarlos', async () => {
+  it('con sesión: menú con Evidencias (ya disponible) y Gastos marcado "Próximamente", que avisa al tocarlo', async () => {
     configurar(crearEntorno());
     await entrarComo();
     const f = TestBed.createComponent(App);
     await f.whenStable();
     const el = f.nativeElement as HTMLElement;
+    expect(el.querySelector('nav.menu a[href="/evidencias"]')?.textContent).toContain('Evidencias');
     const pronto = [...el.querySelectorAll<HTMLButtonElement>('.menu-pronto')];
-    expect(pronto.map((b) => b.textContent?.replace(/\s+/g, ' ').trim())).toEqual(['Evidencias Próximamente', 'Gastos Próximamente']);
+    expect(pronto.map((b) => b.textContent?.replace(/\s+/g, ' ').trim())).toEqual(['Gastos Próximamente']);
     pronto[0].click();
-    expect(TestBed.inject(MensajesService).mensaje()?.texto).toBe('Evidencias: próximamente. Esta función todavía no está disponible.');
+    expect(TestBed.inject(MensajesService).mensaje()?.texto).toBe('Gastos: próximamente. Esta función todavía no está disponible.');
   });
 
   it('indicador visible de "sin conexión"', async () => {

@@ -33,29 +33,29 @@ export interface Credenciales {
 
 const RESULTADOS: readonly ResultadoReporte[] = ['aplicado', 'por-confirmar', 'confirmado', 'registrado', 'sin-efecto', 'descartado'];
 
-function invalida(que: string): never {
+export function invalida(que: string): never {
   // Sin datos de la respuesta en el mensaje (podría traer tokens).
   throw new ErrorApiOperador('servidor', `Respuesta inesperada del servidor (${que}).`);
 }
 
-type Obj = Record<string, unknown>;
-const esObj = (v: unknown): v is Obj => !!v && typeof v === 'object' && !Array.isArray(v);
-function obj(v: unknown, que: string): Obj {
+export type Obj = Record<string, unknown>;
+export const esObj = (v: unknown): v is Obj => !!v && typeof v === 'object' && !Array.isArray(v);
+export function obj(v: unknown, que: string): Obj {
   return esObj(v) ? v : invalida(que);
 }
-function txt(o: Obj, k: string, que: string): string {
+export function txt(o: Obj, k: string, que: string): string {
   const v = o[k];
   return typeof v === 'string' ? v : invalida(`${que}.${k}`);
 }
-function txtONull(o: Obj, k: string): string | null {
+export function txtONull(o: Obj, k: string): string | null {
   const v = o[k];
   return typeof v === 'string' ? v : null;
 }
-function num(o: Obj, k: string, que: string): number {
+export function num(o: Obj, k: string, que: string): number {
   const v = o[k];
   return typeof v === 'number' && Number.isFinite(v) ? v : invalida(`${que}.${k}`);
 }
-function numONull(o: Obj, k: string): number | null {
+export function numONull(o: Obj, k: string): number | null {
   const v = o[k];
   return typeof v === 'number' && Number.isFinite(v) ? v : null;
 }

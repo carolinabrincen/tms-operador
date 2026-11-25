@@ -1,8 +1,9 @@
 /**
- * Traduce un error HTTP de la API del operador a ErrorApiOperador, por status y `codigo` (contrato M1, tabla 3.2).
+ * Traduce un error HTTP de la API del operador a ErrorApiOperador, por status y `codigo` (contrato M1, tabla 3.2, y M2,
+ * sección 2.1).
  * PURO. Los mensajes son para el operador: nunca incluyen el PIN ni los tokens (el cuerpo de la petición no se toca).
  */
-import { CODIGO_HORA_INVALIDA, ErrorApiOperador } from '../operador-api';
+import { CODIGOS_EVIDENCIA, CODIGO_HORA_INVALIDA, ErrorApiOperador } from '../operador-api';
 
 /** De dónde vino el error: cambia el mensaje de 401 y 429. */
 export type ContextoPeticion = 'login' | 'renovar' | 'general';
@@ -23,11 +24,15 @@ export const MENSAJES = {
   mantenimiento: 'La cuenta está en mantenimiento. Se reintenta más tarde.',
 } as const;
 
-/** ProblemDetails `{ title, status, detail, codigo? }`. `detail` es para mostrar; `codigo` para decidir. */
+/**
+ * ProblemDetails `{ title, status, detail, codigo? }`. `detail` es para mostrar; `codigo` para decidir. Los 400 de regla
+ * de evidencias (M2) llegan como `{ status, message, codigo }`: `message` hace las veces de `detail`.
+ */
 export interface ProblemDetails {
   title?: unknown;
   status?: unknown;
   detail?: unknown;
+  message?: unknown;
   codigo?: unknown;
 }
 
@@ -38,7 +43,7 @@ function texto(v: unknown): string | null {
 export function clasificarError(status: number, cuerpo: unknown, contexto: ContextoPeticion): ErrorApiOperador {
   const pd = (cuerpo && typeof cuerpo === 'object' ? cuerpo : {}) as ProblemDetails;
   const codigo = texto(pd.codigo);
-  const detail = texto(pd.detail);
+  const detail = texto(pd.detail) ?? texto(pd.message);
   const err = (tipo: ErrorApiOperador['tipo'], mensaje: string) => new ErrorApiOperador(tipo, mensaje, codigo, status || null);
 
   // Sin respuesta (sin señal, CORS, certificado, servidor apagado).
@@ -53,6 +58,7 @@ export function clasificarError(status: number, cuerpo: unknown, contexto: Conte
   if (status === 403) return err('sesion', codigo === CODIGO_SIN_ACCESO ? MENSAJES.sinAcceso : MENSAJES.sesionTerminada);
 
   if (status === 409 && codigo === CODIGO_CLAVE_DUPLICADA) return err('id-duplicado', detail ?? 'Ese id de reporte ya existe.');
+  if (status === 409 && codigo === CODIGOS_EVIDENCIA.claveDuplicada) return err('id-duplicado', detail ?? 'Ese id de foto ya se usó con otra foto.');
   if (status === 400 && codigo === CODIGO_HORA_INVALIDA) return err('rechazado', MENSAJES.horaInvalida);
   if (status === 400 || status === 404 || status === 409) return err('rechazado', detail ?? MENSAJES.rechazado);
 

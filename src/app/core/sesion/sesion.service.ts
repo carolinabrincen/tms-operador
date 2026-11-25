@@ -2,7 +2,9 @@ import { Injectable, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { normalizarCelular } from '../../shared/utils/acceso.util';
 import { OPERADOR_API } from '../api/operador-api';
+import { HojaRutaService } from '../hoja-ruta/hoja-ruta.service';
 import { AsignacionService } from '../viaje/asignacion.service';
+import { ColaEvidenciasService } from '../evidencias/cola-evidencias.service';
 import { ColaReportesService } from '../reportes/cola-reportes.service';
 import { AlmacenSesion } from './almacen-sesion';
 
@@ -12,7 +14,9 @@ export class SesionService {
   private readonly api = inject(OPERADOR_API);
   private readonly almacen = inject(AlmacenSesion);
   private readonly cola = inject(ColaReportesService);
+  private readonly fotos = inject(ColaEvidenciasService);
   private readonly asignacion = inject(AsignacionService);
+  private readonly hojaRuta = inject(HojaRutaService);
   private readonly router = inject(Router);
 
   readonly sesion = this.almacen.sesion;
@@ -23,12 +27,14 @@ export class SesionService {
     this.almacen.guardar(sesion);
     // Si quedaron reportes pendientes de este operador (de una sesión anterior), se envían ya.
     void this.cola.procesar();
+    void this.fotos.procesar();
   }
 
   /**
-   * Cierra la sesión: avisa al servidor (solo esta sesión) y borra token y refresh, la copia del viaje y el perfil.
-   * La API limita la espera al servidor; sin señal se sale igual. Los reportes (pendientes y enviados) se quedan en
-   * el teléfono y los pendientes se envían cuando ese operador vuelva a entrar.
+   * Cierra la sesión: avisa al servidor (solo esta sesión) y borra token y refresh, las copias del viaje y de la hoja de
+   * ruta, y el perfil.
+   * La API limita la espera al servidor; sin señal se sale igual. Los reportes y las fotos se quedan en el teléfono y
+   * los pendientes se envían cuando ese operador vuelva a entrar.
    */
   async salir(): Promise<void> {
     try {
@@ -37,6 +43,7 @@ export class SesionService {
       // Aunque falle, se sale igual (no hay nada que mostrar al operador).
     }
     this.asignacion.olvidar(this.almacen.operadorId());
+    this.hojaRuta.olvidar(this.almacen.operadorId());
     this.almacen.limpiar();
     await this.router.navigateByUrl('/acceso');
   }

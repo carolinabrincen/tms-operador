@@ -20,6 +20,10 @@
       <app-datos-viaje [viaje]="v" />
     </section>
 
+    @if (v.tipo === 'cargado') {
+      <app-evidencias-viaje [viaje]="v" />
+    }
+
     <app-linea-tiempo [entradas]="linea()" />
   } @else if (estadoCarga() === 'cargando' || estadoCarga() === 'inicial') {
     <p class="texto-suave" role="status">Cargando…</p>

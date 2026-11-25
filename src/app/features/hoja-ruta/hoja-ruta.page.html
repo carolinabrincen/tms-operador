@@ -1,0 +1,218 @@
+<main class="pagina">
+  <a routerLink="/viaje" class="enlace-volver">‹ Mi viaje</a>
+  <h1>Hoja de ruta</h1>
+
+  @if (error()) {
+    <p class="alerta" [class.alerta-aviso]="desdeCopia()" [class.alerta-error]="!desdeCopia()" role="status">{{ error() }}</p>
+  }
+  @if (avisoSalida()) {
+    <p class="alerta alerta-aviso" role="status">{{ avisoSalida() }}</p>
+  }
+
+  @if (hoja(); as h) {
+    <p class="texto-suave generada">Generada el {{ fechaHora(h.generadaEn) }} ({{ TEXTO_ZONA }}) · Salida {{ h.folio }}</p>
+
+    <section class="tarjeta" aria-labelledby="titulo-empresa">
+      <h2 id="titulo-empresa">{{ h.empresa || 'Empresa' }}</h2>
+      <div class="telefonos">
+        @if (tel(h.telefonoTrafico); as t) {
+          <a class="btn btn-primario btn-bloque" [href]="t">Llamar a tráfico (24 h): {{ h.telefonoTrafico }}</a>
+        }
+        @if (tel(h.telefonoEmpresa); as t) {
+          <a class="btn btn-secundario btn-bloque" [href]="t">Llamar a la oficina: {{ h.telefonoEmpresa }}</a>
+        }
+        @if (!h.telefonoTrafico && !h.telefonoEmpresa) {
+          <p class="texto-suave">La oficina no capturó teléfonos en esta hoja.</p>
+        }
+      </div>
+      <dl class="datos">
+        @if (h.salidaProgramada) {
+          <div>
+            <dt>Salida programada</dt>
+            <dd>{{ fechaHora(h.salidaProgramada) }}</dd>
+          </div>
+        }
+        @if (h.finEstimado) {
+          <div>
+            <dt>Fin estimado</dt>
+            <dd>{{ fecha(h.finEstimado) }}</dd>
+          </div>
+        }
+        @if (h.kmPlaneados != null) {
+          <div>
+            <dt>Kilómetros planeados</dt>
+            <dd>{{ km(h.kmPlaneados) }}{{ h.tiempoEstimado ? ' · ' + tiempo(h.tiempoEstimado) : '' }}</dd>
+          </div>
+        }
+        @if (h.operador.nombre) {
+          <div>
+            <dt>Operador</dt>
+            <dd>
+              {{ h.operador.nombre }}
+              @if (h.operador.licenciaNumero) {
+                · Licencia {{ h.operador.licenciaTipo ? 'tipo ' + h.operador.licenciaTipo + ' ' : '' }}{{ h.operador.licenciaNumero }}
+              }
+            </dd>
+          </div>
+        }
+        @if (h.notas) {
+          <div>
+            <dt>Notas de la salida</dt>
+            <dd>{{ h.notas }}</dd>
+          </div>
+        }
+      </dl>
+    </section>
+
+    <section class="tarjeta" aria-labelledby="titulo-unidad-hoja">
+      <h2 id="titulo-unidad-hoja">Unidad</h2>
+      <dl class="datos">
+        <div>
+          <dt>Unidad</dt>
+          <dd>{{ h.unidad.numeroEconomico }} · {{ h.unidad.placas ? 'Placas ' + h.unidad.placas : 'Sin placas' }}</dd>
+        </div>
+        @if (h.unidad.configuracion) {
+          <div>
+            <dt>Configuración</dt>
+            <dd>{{ h.unidad.configuracion }}</dd>
+          </div>
+        }
+        @for (r of h.unidad.remolques; track $index) {
+          <div class="remolque">
+            <dt>Remolque {{ h.unidad.remolques.length > 1 ? $index + 1 : '' }}</dt>
+            <dd>{{ r.numeroEconomico }}{{ r.placas ? ' · Placas ' + r.placas : '' }}</dd>
+          </div>
+        }
+      </dl>
+    </section>
+
+    <h2>Itinerario</h2>
+    @for (t of h.itinerario; track t.orden) {
+      <section class="tarjeta tramo" [attr.aria-label]="'Tramo ' + t.orden">
+        <h3>Tramo {{ t.orden }} · {{ t.tipo === 'cargado' ? 'Cargado' : 'Vacío' }}{{ t.folio ? ' · ' + t.folio : '' }}</h3>
+        @if (t.cliente) {
+          <p class="cliente"><strong>{{ t.cliente }}</strong></p>
+        }
+        @if (t.materialPeligroso) {
+          <p><span class="marca-peligro">MATERIAL PELIGROSO</span></p>
+        }
+
+        <div class="lugar origen">
+          <span class="texto-suave">Origen</span>
+          <strong>{{ t.origen.lugar }}</strong>
+          @if (detalle(t.origen)) {
+            <span>{{ detalle(t.origen) }}</span>
+          }
+        </div>
+        <div class="lugar destino">
+          <span class="texto-suave">Destino</span>
+          <strong>{{ t.destino.lugar }}</strong>
+          @if (detalle(t.destino)) {
+            <span>{{ detalle(t.destino) }}</span>
+          }
+        </div>
+
+        <dl class="datos">
+          @if (t.citaCarga) {
+            <div>
+              <dt>Cita de carga</dt>
+              <dd>{{ fechaHora(t.citaCarga) }}</dd>
+            </div>
+          }
+          @if (t.citaDescarga) {
+            <div>
+              <dt>Cita de descarga</dt>
+              <dd>{{ fechaHora(t.citaDescarga) }}</dd>
+            </div>
+          }
+          @if (t.producto) {
+            <div>
+              <dt>Producto</dt>
+              <dd>{{ t.producto }}</dd>
+            </div>
+          }
+          @if (t.toneladasProgramadas != null) {
+            <div>
+              <dt>Toneladas programadas</dt>
+              <dd>{{ toneladas(t.toneladasProgramadas) }}</dd>
+            </div>
+          }
+          @if (t.referencia) {
+            <div>
+              <dt>Referencia</dt>
+              <dd>{{ t.referencia }}</dd>
+            </div>
+          }
+          @if (t.motivo) {
+            <div>
+              <dt>Motivo del vacío</dt>
+              <dd>{{ motivo(t.motivo) }}{{ t.motivoNota ? ' · ' + t.motivoNota : '' }}</dd>
+            </div>
+          }
+          @if (t.notas) {
+            <div>
+              <dt>Notas</dt>
+              <dd>{{ t.notas }}</dd>
+            </div>
+          }
+          @if (t.km != null) {
+            <div>
+              <dt>Distancia</dt>
+              <dd>{{ km(t.km) }}{{ t.ruta?.tiempo ? ' · ' + tiempo(t.ruta!.tiempo) : '' }}</dd>
+            </div>
+          }
+        </dl>
+
+        @if (t.ruta; as r) {
+          @if (r.nombre) {
+            <p class="texto-suave">Ruta: {{ r.nombre }}</p>
+          }
+          @if (r.paradas.length) {
+            <h4>Paradas autorizadas</h4>
+            <ol class="lista-simple paradas">
+              @for (p of r.paradas; track p.orden) {
+                <li>
+                  <strong>{{ parada(p.tipo) }}</strong>{{ p.referencia ? ': ' + p.referencia : '' }}
+                  @if (p.direccion) {
+                    <br /><span>{{ p.direccion }}</span>
+                  }
+                  @if (p.notas) {
+                    <br /><span class="texto-suave">{{ p.notas }}</span>
+                  }
+                </li>
+              }
+            </ol>
+          }
+          @if (r.plazasCobro.length) {
+            <h4>Casetas</h4>
+            <ol class="lista-simple casetas">
+              @for (c of r.plazasCobro; track c.orden) {
+                <li>{{ c.nombre }}{{ c.autopista ? ' (' + c.autopista + ')' : '' }}</li>
+              }
+            </ol>
+          }
+          @if (r.ligaMapa) {
+            <a class="btn btn-secundario btn-bloque abrir-mapa" [href]="r.ligaMapa" target="_blank" rel="noopener noreferrer">Abrir en mapa</a>
+          }
+        }
+      </section>
+    }
+  } @else if (estado() === 'listo') {
+    <section class="tarjeta tarjeta-destacada sin-hoja" role="status">
+      <h2>No tiene una salida activa</h2>
+      <p>Por eso no hay hoja de ruta. Cuando la oficina le asigne una salida, su hoja aparecerá aquí.</p>
+      <a routerLink="/viaje" class="btn btn-secundario btn-bloque">Ir a Mi viaje</a>
+    </section>
+  } @else if (estado() !== 'error') {
+    <p class="texto-suave" role="status">Cargando la hoja de ruta…</p>
+  }
+
+  <div class="acciones">
+    <button type="button" class="btn btn-secundario btn-bloque" [class.btn-ocupado]="estado() === 'cargando'" (click)="actualizar()">
+      {{ estado() === 'cargando' ? 'Actualizando…' : 'Actualizar' }}
+    </button>
+  </div>
+  @if (guardadaEn()) {
+    <p class="texto-suave actualizado">Guardada en el teléfono: {{ fechaHora(guardadaEn()) }}</p>
+  }
+</main>

@@ -242,7 +242,8 @@ a {
   color: #000;
   border-color: #000;
 }
-.chip-enviado {
+.chip-enviado,
+.chip-enviada {
   background: var(--c-info-fondo);
   color: var(--c-primario-oscuro);
 }
@@ -255,17 +256,20 @@ a {
   background: var(--c-superficie);
   color: var(--c-texto);
 }
-.chip-confirmado {
+.chip-confirmado,
+.chip-recibida {
   background: var(--c-exito);
   color: #fff;
   border-color: var(--c-exito);
 }
-.chip-descartado {
+.chip-descartado,
+.chip-anulada {
   background: var(--c-superficie);
   color: #5c0005;
   border-color: #5c0005;
 }
-.chip-rechazado {
+.chip-rechazado,
+.chip-rechazada {
   background: var(--c-error);
   color: #fff;
   border-color: var(--c-error);
@@ -278,6 +282,18 @@ a {
 .chip-hecho {
   background: var(--c-superficie);
   color: var(--c-texto);
+}
+
+/* Marca de material peligroso en la hoja de ruta: negro sobre amarillo, como el rombo de la placa. */
+.marca-peligro {
+  display: inline-block;
+  padding: 2px 8px;
+  border: 2px solid #000;
+  border-radius: 4px;
+  background: #ffd400;
+  color: #000;
+  font-weight: 800;
+  letter-spacing: 0.03em;
 }
 
 /* ---------------------------------------------------------------- Alertas */

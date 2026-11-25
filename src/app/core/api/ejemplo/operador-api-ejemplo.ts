@@ -15,12 +15,17 @@
  *  - Para pruebas, la "oficina" puede además anular un hito ya confirmado (`anularHito`) y cerrar la salida
  *    (`cerrarSalida`), como en el contrato M1 (3.1 y 2).
  *  - Los mensajes van en español legible, como los del servidor (nunca el valor técnico).
+ *  - M2: hoja de ruta de la salida (null sin salida) y evidencias en memoria con las reglas del contrato (solo viajes
+ *    cargados, viaje cancelado, tipo y descripción, 5 MB, 30 por viaje, id idempotente con la misma foto y 409 con
+ *    otra). Hay una evidencia de la oficina (PDF) en el viaje 2 que no se descarga. `anularEvidencia` (para pruebas).
  */
 import { mensajeCelular, mensajePin, normalizarCelular, terminacionCelular } from '../../../shared/utils/acceso.util';
 import { esHito, esPasoDelOperador, rango, textoEstatus, viajeTerminado } from '../../../shared/utils/estatus-viaje.util';
 import { esTipoIncidencia } from '../../../shared/utils/incidencias.util';
 import { ahoraIsoUtc, msDeIso } from '../../../shared/utils/zona-negocio.util';
-import { ErrorApiOperador, OperadorApi } from '../operador-api';
+import { textoEvidencia } from '../../../shared/utils/evidencias.util';
+import { CODIGOS_EVIDENCIA, ErrorApiOperador, OperadorApi } from '../operador-api';
+import { AcuseEvidencia, DatosEvidencia, EstadoRemotoEvidencia, EvidenciaViaje, HojaRuta, TIPOS_EVIDENCIA } from '../operador-api-m2.modelos';
 import {
   AcuseReporte,
   AsignacionOperador,
@@ -36,7 +41,7 @@ import {
   SesionOperador,
   Viaje,
 } from '../operador-api.modelos';
-import { CELULAR_EJEMPLO_SIN_VIAJE, salidaEjemplo } from './datos-ejemplo';
+import { CELULAR_EJEMPLO_SIN_VIAJE, evidenciasOficinaEjemplo, hojaRutaEjemplo, salidaEjemplo } from './datos-ejemplo';
 
 export interface OpcionesEjemplo {
   /** Operador con sesión en el teléfono (hace las veces del token). */
@@ -69,6 +74,18 @@ interface Programado {
   ejecutar: (en: number) => void;
 }
 
+interface EvidenciaEjemplo {
+  operadorId: string;
+  info: EvidenciaViaje;
+  bytes: Uint8Array | null;
+  recibidaEn: string;
+  anulada: string | null;
+}
+
+/** Máximos del contrato M2 (2.1). */
+const MAX_BYTES_EVIDENCIA = 5 * 1024 * 1024;
+const MAX_EVIDENCIAS_VIAJE = 30;
+
 interface EstadoOperador {
   salida: Salida | null;
   /** La salida que la oficina cerró: sus reportes tardíos se reciben como historial (sin efecto). */
@@ -81,6 +98,7 @@ export class OperadorApiEjemplo implements OperadorApi {
   private readonly opciones: OpcionesEjemplo;
   private readonly recibidos = new Map<string, Recibido>();
   private readonly operadores = new Map<string, EstadoOperador>();
+  private readonly evidencias = new Map<string, EvidenciaEjemplo>();
   private secuencia = 0;
 
   constructor(opciones: Partial<OpcionesEjemplo> = {}) {
@@ -165,7 +183,98 @@ export class OperadorApiEjemplo implements OperadorApi {
       .map((r) => ({ id: r.reporte.id, resultado: r.resultado, confirmadoEn: r.confirmadoEn, mensaje: r.resultado === 'confirmado' ? null : r.mensaje }));
   }
 
+  // ------------------------------------------------------------------ M2: hoja de ruta y evidencias
+
+  async obtenerHojaRuta(): Promise<HojaRuta | null> {
+    await this.red();
+    const estado = this.estadoDe(this.sesion());
+    if (!estado.salida) return null;
+    const hoja = hojaRutaEjemplo(this.opciones.ahora());
+    // Los viajes cancelados no aparecen (como en el servidor).
+    const cancelados = new Set(estado.salida.viajes.filter((v) => v.estatus === 'Cancelado').map((v) => v.folio));
+    return { ...hoja, itinerario: hoja.itinerario.filter((t) => !t.folio || !cancelados.has(t.folio)) };
+  }
+
+  async subirEvidencia(foto: Blob, datos: DatosEvidencia): Promise<AcuseEvidencia> {
+    await this.red();
+    const sesion = this.sesion();
+    const estado = this.estadoDe(sesion);
+    const bytes = new Uint8Array(await foto.arrayBuffer());
+    const previa = this.evidencias.get(datos.id);
+    if (previa) {
+      if (previa.operadorId === sesion.operadorId && previa.bytes && mismosBytes(previa.bytes, bytes)) return this.acuseEvidencia(previa);
+      throw new ErrorApiOperador('id-duplicado', 'Ese id ya se usó con otra foto.', CODIGOS_EVIDENCIA.claveDuplicada, 409);
+    }
+    const rechazo = (codigo: string, mensaje: string, status = 400) => new ErrorApiOperador('rechazado', mensaje, codigo, status);
+    const viaje = estado.salida?.viajes.find((v) => v.id === datos.viajeId) ?? estado.cerrada?.viajes.find((v) => v.id === datos.viajeId);
+    if (!viaje) throw rechazo(CODIGOS_EVIDENCIA.viajeNoEncontrado, 'El viaje no es de sus salidas.', 404);
+    if (viaje.tipo !== 'cargado') throw rechazo(CODIGOS_EVIDENCIA.invalida, 'Los movimientos en vacío no reciben evidencias.');
+    if (viaje.estatus === 'Cancelado') throw rechazo(CODIGOS_EVIDENCIA.estadoInvalido, 'El viaje está cancelado.', 409);
+    if (!(TIPOS_EVIDENCIA as readonly string[]).includes(datos.tipo)) throw rechazo(CODIGOS_EVIDENCIA.invalida, 'Tipo de evidencia inválido.');
+    if (datos.tipo === 'Otro' && !datos.descripcion?.trim()) throw rechazo(CODIGOS_EVIDENCIA.invalida, 'En “Otro” la descripción es obligatoria.');
+    if ((datos.descripcion?.length ?? 0) > 150 || (datos.nota?.length ?? 0) > 500) throw rechazo(CODIGOS_EVIDENCIA.invalida, 'Descripción o nota demasiado largas.');
+    if (!bytes.length || !esJpgOPng(bytes)) throw rechazo(CODIGOS_EVIDENCIA.archivoInvalido, 'El archivo no es una foto JPG o PNG.');
+    if (bytes.length > MAX_BYTES_EVIDENCIA) throw rechazo(CODIGOS_EVIDENCIA.demasiadoGrande, 'La foto pesa más de 5 MB.');
+    const vigentes = [...this.evidencias.values()].filter((e) => e.info.viajeId === viaje.id && !e.anulada).length;
+    if (vigentes >= MAX_EVIDENCIAS_VIAJE) throw rechazo(CODIGOS_EVIDENCIA.limite, 'El viaje ya tiene 30 evidencias.');
+    const nueva: EvidenciaEjemplo = {
+      operadorId: sesion.operadorId,
+      bytes,
+      recibidaEn: this.iso(),
+      anulada: null,
+      info: {
+        id: datos.id,
+        viajeId: viaje.id,
+        tipo: datos.tipo,
+        descripcion: datos.descripcion,
+        nota: datos.nota,
+        contentType: foto.type || 'image/jpeg',
+        tamanoBytes: bytes.length,
+        subidaEn: this.iso(),
+        tomadaEn: datos.tomadaEn,
+        autor: 'operador',
+      },
+    };
+    this.evidencias.set(datos.id, nueva);
+    return this.acuseEvidencia(nueva);
+  }
+
+  async consultarEvidencias(ids: string[]): Promise<EstadoRemotoEvidencia[]> {
+    await this.red();
+    const sesion = this.sesion();
+    return ids
+      .map((id) => this.evidencias.get(id))
+      .filter((e): e is EvidenciaEjemplo => !!e && e.operadorId === sesion.operadorId && e.info.autor === 'operador')
+      .map((e) => ({ id: e.info.id, estado: e.anulada ? 'anulada' : 'recibida', motivo: e.anulada ? `La oficina anuló la evidencia: ${e.anulada}` : null }));
+  }
+
+  async evidenciasDeViaje(viajeId: string): Promise<EvidenciaViaje[]> {
+    await this.red();
+    const sesion = this.sesion();
+    this.estadoDe(sesion);
+    return [...this.evidencias.values()]
+      .filter((e) => e.operadorId === sesion.operadorId && e.info.viajeId === viajeId && !e.anulada)
+      .map((e) => structuredClone(e.info));
+  }
+
+  async archivoEvidencia(id: string): Promise<Blob | null> {
+    await this.red();
+    const sesion = this.sesion();
+    const e = this.evidencias.get(id);
+    // Como el servidor: de la oficina, anulada o ajena → 404 (sin imagen).
+    if (!e || e.operadorId !== sesion.operadorId || e.info.autor !== 'operador' || e.anulada || !e.bytes) return null;
+    return new Blob([e.bytes.slice()], { type: e.info.contentType ?? 'image/jpeg' });
+  }
+
   // ------------------------------------------------------------------ acciones de la "oficina" (para pruebas)
+
+  /** La oficina anula una evidencia: deja de estar vigente y su estado dice el motivo. */
+  anularEvidencia(id: string, motivo: string): boolean {
+    const e = this.evidencias.get(id);
+    if (!e || e.anulada) return false;
+    e.anulada = motivo;
+    return true;
+  }
 
   /**
    * La oficina anula el hito (Documentado o Descargado) que había confirmado un reporte: ese reporte pasa a
@@ -274,6 +383,11 @@ export class OperadorApiEjemplo implements OperadorApi {
     let estado = this.operadores.get(sesion.operadorId);
     if (!estado) {
       estado = { salida: sesion.sinViaje ? null : salidaEjemplo(this.opciones.ahora()), cerrada: null, programados: [] };
+      if (estado.salida) {
+        for (const info of evidenciasOficinaEjemplo(this.opciones.ahora())) {
+          this.evidencias.set(`${sesion.operadorId}:${info.id}`, { operadorId: sesion.operadorId, info, bytes: null, recibidaEn: info.subidaEn, anulada: null });
+        }
+      }
       this.operadores.set(sesion.operadorId, estado);
     }
     const ahora = this.opciones.ahora().getTime();
@@ -296,6 +410,10 @@ export class OperadorApiEjemplo implements OperadorApi {
     return ahoraIsoUtc(this.opciones.ahora());
   }
 
+  private acuseEvidencia(e: EvidenciaEjemplo): AcuseEvidencia {
+    return { id: e.info.id, recibidaEn: e.recibidaEn, mensaje: `Recibida: ${textoEvidencia(e.info.tipo)}.` };
+  }
+
   private async red(): Promise<void> {
     if (this.opciones.latenciaMs > 0) await new Promise((r) => setTimeout(r, this.opciones.latenciaMs));
     if (!this.opciones.enLinea()) throw new ErrorApiOperador('sin-conexion', 'Sin conexión.');
@@ -306,4 +424,15 @@ export class OperadorApiEjemplo implements OperadorApi {
     if (!operadorId?.startsWith(PREFIJO_OPERADOR)) throw new ErrorApiOperador('sesion', 'Su sesión terminó. Entre de nuevo.');
     return { operadorId, sinViaje: CELULAR_EJEMPLO_SIN_VIAJE.test(operadorId) };
   }
+}
+
+function mismosBytes(a: Uint8Array, b: Uint8Array): boolean {
+  return a.length === b.length && a.every((x, i) => x === b[i]);
+}
+
+/** Como el servidor: se revisa el CONTENIDO (firma JPEG FF D8 FF o PNG 89 50 4E 47), no la extensión. */
+function esJpgOPng(b: Uint8Array): boolean {
+  const jpg = b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff;
+  const png = b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47;
+  return jpg || png;
 }

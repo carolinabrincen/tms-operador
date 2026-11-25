@@ -35,6 +35,9 @@
     }
 
     @if (salida(); as s) {
+      <app-sugerencia-acuse [viajes]="viajes()" />
+      <a routerLink="/hoja-ruta" class="btn btn-secundario btn-bloque ver-hoja-ruta">🗺 Ver hoja de ruta</a>
+
       @if (viajes().length > 1) {
         <h2>Viajes de esta salida</h2>
         @for (v of viajes(); track v.id) {

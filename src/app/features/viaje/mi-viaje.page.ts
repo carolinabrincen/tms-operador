@@ -10,13 +10,14 @@ import { DatosViajeComponent } from '../../shared/ui/datos-viaje.component';
 import { EtiquetaEstatusComponent } from '../../shared/ui/etiqueta-estatus.component';
 import { LineaTiempoComponent } from '../../shared/ui/linea-tiempo.component';
 import { PanelAvanceComponent } from '../../shared/ui/panel-avance.component';
+import { SugerenciaAcuseComponent } from '../../shared/ui/sugerencia-acuse.component';
 import { Guia, guia, marcaDeGuia, origenDestino, viajeActivo, viajeQueToca, viajesEnOrden } from '../../shared/utils/estatus-viaje.util';
 import { lineaDeTiempo } from '../../shared/utils/linea-tiempo.util';
 import { cuandoNegocio } from '../../shared/utils/zona-negocio.util';
 
 @Component({
   selector: 'app-mi-viaje',
-  imports: [RouterLink, PanelAvanceComponent, DatosViajeComponent, LineaTiempoComponent, EtiquetaEstatusComponent],
+  imports: [RouterLink, PanelAvanceComponent, DatosViajeComponent, LineaTiempoComponent, EtiquetaEstatusComponent, SugerenciaAcuseComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './mi-viaje.page.html',
   styles: `
@@ -31,6 +32,9 @@ import { cuandoNegocio } from '../../shared/utils/zona-negocio.util';
       display: block;
       color: inherit;
       text-decoration: none;
+    }
+    .ver-hoja-ruta {
+      margin-bottom: 16px;
     }
     .actualizado {
       margin-top: 8px;

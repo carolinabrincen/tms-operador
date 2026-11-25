@@ -5,6 +5,8 @@ import { provideRouter } from '@angular/router';
 import { IDBFactory } from 'fake-indexeddb';
 import { OperadorApiEjemplo } from '../core/api/ejemplo/operador-api-ejemplo';
 import { OPERADOR_API } from '../core/api/operador-api';
+import { ALMACEN_EVIDENCIAS, AlmacenEvidenciasIndexedDb } from '../core/evidencias/almacen-evidencias';
+import { HERRAMIENTAS_FOTO, HerramientasFoto } from '../shared/utils/foto.util';
 import { ALMACEN_LOCAL, AlmacenMemoria, NAVEGADOR, NavegadorMinimo, RELOJ } from '../core/plataforma';
 import { ALMACEN_REPORTES, AlmacenReportesIndexedDb } from '../core/reportes/almacen-reportes';
 import { AlmacenSesion } from '../core/sesion/almacen-sesion';
@@ -33,6 +35,8 @@ export function configurar(e: EntornoPruebas, extra: (Provider | EnvironmentProv
       { provide: NAVEGADOR, useValue: e.navegador },
       { provide: RELOJ, useValue: () => e.reloj.ahora },
       { provide: ALMACEN_REPORTES, useFactory: () => new AlmacenReportesIndexedDb(e.idb) },
+      { provide: ALMACEN_EVIDENCIAS, useFactory: () => new AlmacenEvidenciasIndexedDb(e.idb) },
+      { provide: HERRAMIENTAS_FOTO, useValue: HERRAMIENTAS_FOTO_PRUEBA },
       {
         provide: OPERADOR_API,
         useFactory: () => {
@@ -64,3 +68,17 @@ export function ponerEnLinea(e: EntornoPruebas, enLinea: boolean): void {
   e.navegador.onLine = enLinea;
   window.dispatchEvent(new Event(enLinea ? 'online' : 'offline'));
 }
+
+/** Una "foto" JPEG mínima (firma FF D8 FF): el ejemplo, como el servidor, revisa el contenido. `n` la hace distinta. */
+export function fotoJpeg(n = 1, tamano = 64): Blob {
+  const bytes = new Uint8Array(tamano);
+  bytes.set([0xff, 0xd8, 0xff, 0xe0]);
+  bytes[tamano - 1] = n;
+  return new Blob([bytes], { type: 'image/jpeg' });
+}
+
+/** Sin canvas en las pruebas: "decodificar" da 4032×3024 y "codificar" devuelve un JPEG pequeño. */
+export const HERRAMIENTAS_FOTO_PRUEBA: HerramientasFoto = {
+  decodificar: async () => ({ ancho: 4032, alto: 3024, fuente: {} as CanvasImageSource }),
+  codificar: async () => fotoJpeg(7),
+};

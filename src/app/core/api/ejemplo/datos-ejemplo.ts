@@ -1,11 +1,13 @@
 /**
- * DATOS DE EJEMPLO (ficticios). Clientes, folios y referencias son inventados.
- * Sin tarifas, ingresos, costos, utilidad ni pagos: esos campos no existen en los modelos del operador.
+ * DATOS DE EJEMPLO (ficticios). Clientes, folios, referencias, direcciones y teléfonos son inventados.
+ * Sin tarifas, ingresos, costos, utilidad, pagos ni importes (tampoco de casetas o diésel): esos campos no existen en
+ * los modelos del operador.
  *
  * Las citas se calculan a partir del día de hoy EN EL NEGOCIO (America/Mexico_City), para que el ejemplo siempre se
  * vea vigente.
  */
 import { ahoraIsoUtc, diaNegocio } from '../../../shared/utils/zona-negocio.util';
+import { EvidenciaViaje, HojaRuta } from '../operador-api-m2.modelos';
 import { IsoUtc, Salida, Unidad } from '../operador-api.modelos';
 
 /** Desfase del centro de México (sin horario de verano desde 2022). */
@@ -108,3 +110,153 @@ export function salidaEjemplo(ahora: Date): Salida {
  * "No tiene un viaje activo".
  */
 export const CELULAR_EJEMPLO_SIN_VIAJE = /0000$/;
+
+
+/** Liga de Google Maps de ejemplo (mismo formato que manda el servidor: origen, puntos y destino). */
+function ligaMapa(origen: string, destino: string, puntos: string[] = []): string {
+  const q = new URLSearchParams({ api: '1', origin: origen, destination: destino });
+  if (puntos.length) q.set('waypoints', puntos.join('|'));
+  return `https://www.google.com/maps/dir/?${q.toString()}`;
+}
+
+/**
+ * Hoja de ruta de la salida de ejemplo (contrato M2, sección 1). Los 4 tramos de salidaEjemplo, en orden; el viaje 2
+ * con dirección completa, parada autorizada y casetas por nombre (sin monto); el 3 transporta material peligroso.
+ */
+export function hojaRutaEjemplo(ahora: Date): HojaRuta {
+  return {
+    folio: 'SAL-2026-00418',
+    generadaEn: ahoraIsoUtc(new Date(ahora.getTime() - 2 * 60 * 60 * 1000)),
+    empresa: 'Transportes de Ejemplo del Norte',
+    telefonoEmpresa: '81 5550 0100',
+    telefonoTrafico: '800 555 0199',
+    salidaProgramada: citaNegocio(ahora, 0, '06:00'),
+    finEstimado: diaNegocio(citaNegocio(ahora, 1, '18:00')),
+    notas: 'Revise presión de llantas antes de salir. Cualquier retraso, avise a tráfico.',
+    operador: { nombre: 'Operador de ejemplo', licenciaTipo: 'E', licenciaNumero: 'EJ-000000' },
+    unidad: {
+      numeroEconomico: 'T-104',
+      placas: '41-AK-7R',
+      configuracion: 'T3-S2 · Tractocamión con semirremolque',
+      remolques: [{ numeroEconomico: 'R-221', placas: '12-UP-3X' }],
+    },
+    itinerario: [
+      {
+        orden: 1,
+        tipo: 'vacio',
+        folio: null,
+        cliente: null,
+        origen: { lugar: 'Patio Guadalupe, N.L.', direccion: null, descripcion: null },
+        destino: { lugar: 'Estación de diésel, Carr. Miguel Alemán km 12', direccion: null, descripcion: null },
+        citaCarga: null,
+        citaDescarga: null,
+        producto: null,
+        materialPeligroso: null,
+        toneladasProgramadas: null,
+        referencia: null,
+        notas: 'Cargar tanque lleno antes de ir a la planta.',
+        motivo: 'CargaCombustible',
+        motivoNota: null,
+        km: 14,
+        ruta: null,
+      },
+      {
+        orden: 2,
+        tipo: 'cargado',
+        folio: 'VIA-2026-00771',
+        cliente: 'Aceros del Norte (ejemplo)',
+        origen: { lugar: 'Apodaca, N.L.', direccion: 'Av. Ejemplo 100, Parque Industrial, C.P. 66600', descripcion: 'Planta' },
+        destino: { lugar: 'Saltillo, Coah.', direccion: 'Blvd. Muestra 2500, Zona Industrial, C.P. 25000', descripcion: 'Almacén' },
+        citaCarga: citaNegocio(ahora, 0, '08:00'),
+        citaDescarga: citaNegocio(ahora, 0, '13:00'),
+        producto: 'Lámina rolada en caliente',
+        materialPeligroso: false,
+        toneladasProgramadas: 28.5,
+        referencia: 'OC-55821',
+        notas: 'Presentarse con equipo de protección completo. Acceso por la puerta 3.',
+        motivo: null,
+        motivoNota: null,
+        km: 96.5,
+        ruta: {
+          nombre: 'Apodaca - Saltillo',
+          km: 96.5,
+          tiempo: { horas: 1, minutos: 40 },
+          paradas: [{ orden: 1, tipo: 'Descanso', referencia: 'Parador km 40', notas: 'Máximo 30 minutos.', direccion: null, lat: 25.55, lng: -100.75 }],
+          plazasCobro: [{ orden: 1, nombre: 'Plaza Santa Catarina (ejemplo)', autopista: 'Monterrey - Saltillo' }],
+          ligaMapa: ligaMapa('Apodaca, N.L.', 'Saltillo, Coah.', ['25.55,-100.75']),
+        },
+      },
+      {
+        orden: 3,
+        tipo: 'cargado',
+        folio: 'VIA-2026-00772',
+        cliente: 'Empaques del Bajío (ejemplo)',
+        origen: { lugar: 'Ramos Arizpe, Coah.', direccion: null, descripcion: null },
+        destino: { lugar: 'San Luis Potosí, S.L.P.', direccion: null, descripcion: null },
+        citaCarga: citaNegocio(ahora, 0, '16:00'),
+        citaDescarga: citaNegocio(ahora, 1, '08:00'),
+        producto: 'Cartón corrugado en tarimas',
+        materialPeligroso: true,
+        toneladasProgramadas: 18,
+        referencia: 'PED-90317',
+        notas: null,
+        motivo: null,
+        motivoNota: null,
+        km: 455,
+        ruta: {
+          nombre: 'Ramos Arizpe - San Luis Potosí',
+          km: 455,
+          tiempo: { horas: 5, minutos: 15 },
+          paradas: [
+            { orden: 1, tipo: 'CargaDiesel', referencia: 'Estación Matehuala (ejemplo)', notas: null, direccion: null, lat: null, lng: null },
+            { orden: 2, tipo: 'Resguardo', referencia: 'Patio de resguardo km 300', notas: 'Si llega después de las 22:00.', direccion: null, lat: null, lng: null },
+          ],
+          plazasCobro: [
+            { orden: 1, nombre: 'Plaza Los Chorros (ejemplo)', autopista: 'Saltillo - Matehuala' },
+            { orden: 2, nombre: 'Plaza Huizache (ejemplo)', autopista: 'Matehuala - San Luis Potosí' },
+          ],
+          ligaMapa: ligaMapa('Ramos Arizpe, Coah.', 'San Luis Potosí, S.L.P.'),
+        },
+      },
+      {
+        orden: 4,
+        tipo: 'vacio',
+        folio: null,
+        cliente: null,
+        origen: { lugar: 'San Luis Potosí, S.L.P.', direccion: null, descripcion: null },
+        destino: { lugar: 'Taller Diésel del Norte, Guadalupe, N.L.', direccion: null, descripcion: null },
+        citaCarga: null,
+        citaDescarga: null,
+        producto: null,
+        materialPeligroso: null,
+        toneladasProgramadas: null,
+        referencia: null,
+        notas: 'Servicio de frenos programado al regresar.',
+        motivo: 'Taller',
+        motivoNota: 'Servicio de frenos',
+        km: 510,
+        ruta: null,
+      },
+    ],
+    kmPlaneados: 1075.5,
+    tiempoEstimado: { horas: 6, minutos: 55 },
+  };
+}
+
+/** Evidencia que ya subió la oficina en el viaje 2 (un PDF): la app la muestra solo como renglón, sin archivo. */
+export function evidenciasOficinaEjemplo(ahora: Date): EvidenciaViaje[] {
+  return [
+    {
+      id: 'ej-evi-oficina-1',
+      viajeId: 'ej-via-771',
+      tipo: 'CartaPorteFirmada',
+      descripcion: null,
+      nota: 'Capturada en oficina',
+      contentType: 'application/pdf',
+      tamanoBytes: 245_760,
+      subidaEn: ahoraIsoUtc(new Date(ahora.getTime() - 30 * 60 * 1000)),
+      tomadaEn: null,
+      autor: 'oficina',
+    },
+  ];
+}
