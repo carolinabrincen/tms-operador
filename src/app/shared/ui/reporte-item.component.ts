@@ -42,7 +42,7 @@ import { cuandoNegocio, fechaHoraNegocio } from '../utils/zona-negocio.util';
   `,
   styles: `
     .reporte h3 {
-      font-size: 1.15rem;
+      font-size: 1.05rem;
     }
     .reporte-resumen {
       font-weight: 600;

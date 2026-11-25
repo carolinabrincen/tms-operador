@@ -10,6 +10,7 @@ import {
   avisoFotosAcumuladas,
   conAcuseFoto,
   conEstadoRemotoFoto,
+  conLigaNueva,
   conFallaFoto,
   conNuevoIdFoto,
   conReenvioFoto,
@@ -20,6 +21,7 @@ import {
   mensajeFoto,
   normalizarEvidenciaLocal,
   retrasoReintentoFotoMs,
+  sinLigaPerdida,
   sugerenciasAcuse,
   textoFotosPendientes,
 } from './evidencias.util';
@@ -181,5 +183,16 @@ describe('evidencias.util: reglas de las fotos', () => {
       // Una foto No aceptada no cuenta: se vuelve a sugerir.
       expect(sugerenciasAcuse(s.viajes, [descargado()], [conFoto({ reporteId: 'r-desc' }, 'rechazada')], new Set())).toHaveLength(1);
     });
+  });
+
+  it('liga al reporte: sigue al id nuevo; sin el reporte o con el reporte "No aceptado", se quita', () => {
+    const ligada = foto('a', '2026-11-24T16:00:00Z', { reporteId: 'r1' });
+    expect(conLigaNueva(ligada, 'r1', 'r2').datos.reporteId).toBe('r2');
+    expect(conLigaNueva(ligada, 'otro', 'r2')).toBe(ligada);
+    expect(sinLigaPerdida(ligada, [{ id: 'r1', estado: 'enviado' }])).toBe(ligada);
+    expect(sinLigaPerdida(ligada, [{ id: 'r1', estado: 'rechazado' }]).datos.reporteId).toBeNull();
+    expect(sinLigaPerdida(ligada, []).datos.reporteId).toBeNull();
+    const suelta = foto('b');
+    expect(sinLigaPerdida(suelta, [])).toBe(suelta);
   });
 });

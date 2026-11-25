@@ -2,6 +2,7 @@ import { DestroyRef, Injectable, computed, effect, inject, signal, untracked } f
 import {
   avisoFotosAcumuladas,
   conAcuseFoto,
+  conLigaNueva,
   conEstadoRemotoFoto,
   conFallaFoto,
   conNuevoIdFoto,
@@ -12,12 +13,14 @@ import {
   fotosRecientes,
   mensajeErrorFoto,
   retrasoReintentoFotoMs,
+  sinLiga,
+  sinLigaPerdida,
 } from '../../shared/utils/evidencias.util';
 import { bytesDeBlob } from '../../shared/utils/foto.util';
 import { generarIdReporte } from '../../shared/utils/id-reporte.util';
 import { ahoraIsoUtc } from '../../shared/utils/zona-negocio.util';
-import { DatosEvidencia } from '../api/operador-api-m2.modelos';
-import { OPERADOR_API, comoErrorApi } from '../api/operador-api';
+import { AcuseEvidencia, DatosEvidencia } from '../api/operador-api-m2.modelos';
+import { CODIGOS_EVIDENCIA, OPERADOR_API, comoErrorApi } from '../api/operador-api';
 import { ConexionService } from '../conexion/conexion.service';
 import { NAVEGADOR, RELOJ } from '../plataforma';
 import { ColaReportesService } from '../reportes/cola-reportes.service';
@@ -44,7 +47,9 @@ export interface NuevaEvidencia {
  *  3. y después se sube. Sin señal se queda pendiente y se reintenta sola: al volver la señal, al volver a la app y
  *     con espera creciente si el servidor falla. Reenviar el mismo id con la misma foto no duplica (200).
  *
- * Una foto ligada a un reporte (p. ej. el acuse del Descargado) espera a que ese reporte llegue al servidor.
+ * Una foto ligada a un reporte (p. ej. el acuse del Descargado) espera a que ese reporte llegue al servidor; si el
+ * reporte cambia de id (409), la foto sigue al id nuevo; si el reporte ya no existe, no fue aceptado o el servidor
+ * rechaza la liga, la foto se envía sin liga (importa más que llegue).
  * 409 de id duplicado (ese id con otra foto) → otro id y se reenvía. 400/404/409 → "No aceptada" con un texto de usted.
  */
 @Injectable({ providedIn: 'root' })
@@ -86,6 +91,7 @@ export class ColaEvidenciasService {
     this.cargaInicial = this.recargar();
     void this.cargaInicial.then(() => this.procesar());
     const baja = this.conexion.alRecuperar(() => void this.procesar());
+    const bajaCambioId = this.reportes.alCambiarId((viejo, nuevo) => this.religar(viejo, nuevo));
     // Cuando un reporte llega al servidor, la foto ligada a él (p. ej. el acuse) ya puede subirse.
     let visto = this.reportes.enviados();
     effect(() => {
@@ -96,6 +102,7 @@ export class ColaEvidenciasService {
     });
     inject(DestroyRef).onDestroy(() => {
       baja();
+      bajaCambioId();
       this.cancelarReintento();
     });
   }
@@ -191,11 +198,34 @@ export class ColaEvidenciasService {
 
   // ------------------------------------------------------------------ internos
 
+  /** El reporte ligado cambió de id: las fotos ligadas al viejo pasan al nuevo (en memoria y en el teléfono). */
+  private async religar(viejo: string, nuevo: string): Promise<void> {
+    await this.cargaInicial;
+    for (const f of this.todasSig()) {
+      const religada = conLigaNueva(f, viejo, nuevo);
+      if (religada !== f) await this.guardarYPoner(religada);
+    }
+  }
+
+  /** Sube una foto; si el servidor rechaza la liga al reporte (VIAJE_EVIDENCIA_INVALIDA), la reintenta sin liga. */
+  private async subir(f: EvidenciaLocal): Promise<{ acuse: AcuseEvidencia; foto: EvidenciaLocal }> {
+    const blob = () => new Blob([f.foto!], { type: f.tipoContenido });
+    try {
+      return { acuse: await this.api.subirEvidencia(blob(), f.datos), foto: f };
+    } catch (e) {
+      const error = comoErrorApi(e);
+      if (!f.datos.reporteId || error.tipo !== 'rechazado' || error.codigo !== CODIGOS_EVIDENCIA.invalida) throw e;
+      const suelta = sinLiga(f);
+      return { acuse: await this.api.subirEvidencia(blob(), suelta.datos), foto: suelta };
+    }
+  }
+
   private async unaCorrida(): Promise<void> {
     await this.cargaInicial;
     const operadorId = this.sesion.operadorId();
     if (!operadorId) return;
     await this.recargar(); // otra pestaña pudo agregar o subir fotos
+    await this.reportes.listo(); // para saber si el reporte ligado existe, la cola de reportes debe estar leída
     const cola = fotosPorEnviar(this.todasSig(), operadorId, this.reportes.reportes());
     if (!cola.length) {
       this.cancelarReintento();
@@ -204,11 +234,14 @@ export class ColaEvidenciasService {
     if (!this.conexion.enLinea()) return; // se reintenta sola al volver la señal
     this.cancelarReintento();
     this.enviandoSig.set(true);
-    for (const f of cola) {
+    for (const original of cola) {
       if (this.sesion.operadorId() !== operadorId) return;
+      let f = sinLigaPerdida(original, this.reportes.reportes());
+      if (f !== original) await this.guardarYPoner(f); // el reporte ligado ya no existe o no fue aceptado
       try {
-        const acuse = await this.api.subirEvidencia(new Blob([f.foto!], { type: f.tipoContenido }), f.datos);
-        await this.guardarYPoner(conAcuseFoto(f, acuse, ahoraIsoUtc(this.reloj())));
+        const subida = await this.subir(f);
+        f = subida.foto;
+        await this.guardarYPoner(conAcuseFoto(f, subida.acuse, ahoraIsoUtc(this.reloj())));
       } catch (e) {
         const error = comoErrorApi(e);
         if (error.tipo === 'id-duplicado' && f.intentos < MAX_CAMBIOS_DE_ID) {

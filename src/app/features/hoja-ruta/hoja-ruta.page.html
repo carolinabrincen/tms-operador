@@ -1,6 +1,6 @@
+<app-encabezado titulo="Hoja de ruta" volver="/viaje" />
+
 <main class="pagina">
-  <a routerLink="/viaje" class="enlace-volver">‹ Mi viaje</a>
-  <h1>Hoja de ruta</h1>
 
   @if (error()) {
     <p class="alerta" [class.alerta-aviso]="desdeCopia()" [class.alerta-error]="!desdeCopia()" role="status">{{ error() }}</p>

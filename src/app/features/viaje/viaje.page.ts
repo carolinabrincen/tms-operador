@@ -3,7 +3,10 @@ import { RouterLink } from '@angular/router';
 import { ColaReportesService } from '../../core/reportes/cola-reportes.service';
 import { AsignacionService } from '../../core/viaje/asignacion.service';
 import { activarRefrescoDelViaje } from '../../core/viaje/refresco-viaje';
+import { BarraAvanceComponent } from '../../shared/ui/barra-avance.component';
 import { DatosViajeComponent } from '../../shared/ui/datos-viaje.component';
+import { EncabezadoComponent } from '../../shared/ui/encabezado.component';
+import { TrayectoComponent } from '../../shared/ui/trayecto.component';
 import { EtiquetaEstatusComponent } from '../../shared/ui/etiqueta-estatus.component';
 import { EvidenciasViajeComponent } from '../../shared/ui/evidencias-viaje.component';
 import { LineaTiempoComponent } from '../../shared/ui/linea-tiempo.component';
@@ -14,7 +17,17 @@ import { lineaDeTiempo } from '../../shared/utils/linea-tiempo.util';
 /** Detalle de un viaje de la salida: estatus, pasos, incidencias, datos, fotos (solo cargados) y línea de tiempo. Ruta /viaje/:id. */
 @Component({
   selector: 'app-viaje',
-  imports: [RouterLink, PanelAvanceComponent, DatosViajeComponent, LineaTiempoComponent, EtiquetaEstatusComponent, EvidenciasViajeComponent],
+  imports: [
+    RouterLink,
+    EncabezadoComponent,
+    BarraAvanceComponent,
+    TrayectoComponent,
+    PanelAvanceComponent,
+    DatosViajeComponent,
+    LineaTiempoComponent,
+    EtiquetaEstatusComponent,
+    EvidenciasViajeComponent,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './viaje.page.html',
 })
@@ -27,6 +40,11 @@ export class ViajePage implements OnInit {
 
   protected readonly estadoCarga = this.asignacionSrv.estado;
   protected readonly ruta = origenDestino;
+  /** "Viaje 2 · Cargado" en el encabezado. */
+  protected readonly titulo = computed(() => {
+    const v = this.viaje();
+    return v ? `Viaje ${v.orden} · ${v.tipo === 'cargado' ? 'Cargado' : 'Vacío'}` : 'Viaje';
+  });
   protected readonly viaje = computed(() => this.asignacionSrv.asignacion()?.salida?.viajes.find((v) => v.id === this.id()) ?? null);
   /** La asignación llegó sin salida: la oficina la cerró o la canceló. */
   protected readonly sinSalida = computed(() => this.estadoCarga() === 'listo' && this.asignacionSrv.asignacion()?.salida === null);

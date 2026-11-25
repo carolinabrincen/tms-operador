@@ -116,6 +116,18 @@ service worker, la ubicación y `crypto.randomUUID` no funcionan en `http://` sa
 - Con el teléfono sin señal (modo avión, o "Offline" en DevTools), los reportes quedan pendientes y se envían solos al
   volver la conexión.
 
+## Estilo visual
+
+- Colores, radios, espacios, letra y sombras: **solo** en `src/tema.scss` (variables CSS). Fondo gris muy claro, tarjetas
+  blancas con borde fino, esquinas con una sola escala (tarjetas 18 px, botones 14 a 16 px, píldoras), títulos en peso
+  600 como máximo. Un solo color fuerte (el azul de la marca); ámbar suave para incidencias y avisos; rojo para errores.
+- Todo el texto tiene contraste ≥ 4.5:1 (valores calculados en el encabezado de `tema.scss`), los botones miden ≥ 48 px
+  de alto y el texto de cuerpo ≥ 14 px.
+- Cada pantalla pone su encabezado azul con `app-encabezado` (`shared/ui/encabezado.component.ts`): alto en Mi viaje
+  (viaje, estatus en grande y barra de avance), más bajo con flecha de regreso en las demás. Ahí van "Salir", "Datos de
+  ejemplo" y los avisos de conexión y pendientes.
+- En pantallas anchas la app es una columna centrada de 480 px (encabezado y menú incluidos).
+
 ## Marca (nombre visible)
 
 El nombre visible, el nombre corto y los colores están **solo** en `src/marca.json`. `npm run marca` regenera desde ahí
@@ -150,7 +162,7 @@ src/
       evidencias/                 Evidencias (fotos del teléfono)
     shared/
       utils/                      lógica pura (*.util.ts) con sus pruebas: estatus, incidencias, línea de tiempo…
-      ui/                         panel de avance, línea de tiempo, datos del viaje, reporte
+      ui/                         encabezado, barra de avance, trayecto, panel de avance, línea de tiempo, datos del viaje…
     testing/                      apoyo para pruebas (fuera del build de la app)
 scripts/marca.mjs                 aplica la marca e iconos
 ```

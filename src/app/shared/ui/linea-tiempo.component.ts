@@ -7,7 +7,7 @@ import { TEXTO_ZONA_NEGOCIO, cuandoNegocio, fechaHoraNegocio } from '../utils/zo
   selector: 'app-linea-tiempo',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <h2>Línea de tiempo</h2>
+    <h2 class="titulo-seccion">Línea de tiempo</h2>
     <p class="texto-suave">Horas en {{ TEXTO_ZONA }}.</p>
     <ol class="linea">
       @for (e of entradas(); track e.clave) {
@@ -29,7 +29,7 @@ import { TEXTO_ZONA_NEGOCIO, cuandoNegocio, fechaHoraNegocio } from '../utils/zo
       list-style: none;
       margin: 0;
       padding: 0 0 0 18px;
-      border-left: 4px solid var(--c-borde);
+      border-left: 2px solid var(--c-borde);
     }
     .linea-item {
       position: relative;
@@ -40,33 +40,33 @@ import { TEXTO_ZONA_NEGOCIO, cuandoNegocio, fechaHoraNegocio } from '../utils/zo
     .linea-item::before {
       content: '';
       position: absolute;
-      left: -29px;
-      top: 4px;
+      left: -26px;
+      top: 5px;
       width: 14px;
       height: 14px;
       border-radius: 50%;
       background: var(--c-primario);
-      border: 3px solid var(--c-fondo);
+      border: 3px solid var(--c-fondo-pagina);
     }
     .linea-incidencia::before {
-      background: var(--c-aviso);
-      border-color: #000;
+      background: var(--c-aviso-icono);
     }
     .linea-provisional::before {
-      background: var(--c-fondo);
-      border-color: var(--c-primario);
+      background: var(--c-superficie);
+      box-shadow: inset 0 0 0 2px var(--c-primario);
     }
     .linea-hora {
-      font-size: 0.95rem;
-      font-weight: 700;
+      font-size: var(--texto-chico);
+      font-weight: var(--peso-medio);
       color: var(--c-texto-suave);
     }
     .linea-texto {
-      font-size: 1.1rem;
-      font-weight: 700;
+      font-size: 1rem;
+      font-weight: var(--peso-titulo);
     }
     .linea-quien {
-      font-size: 0.95rem;
+      font-size: var(--texto-chico);
+      color: var(--c-texto-suave);
     }
     .linea-nota {
       font-style: italic;

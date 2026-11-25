@@ -5,6 +5,7 @@ import { MARCA } from '../../core/config/marca';
 import { MensajesService } from '../../core/mensajes/mensajes.service';
 import { AlmacenSesion } from '../../core/sesion/almacen-sesion';
 import { SesionService } from '../../core/sesion/sesion.service';
+import { EncabezadoComponent } from '../../shared/ui/encabezado.component';
 import { PIN_LARGO, PIN_MAX, mensajeCelular, mensajePin } from '../../shared/utils/acceso.util';
 
 /** Mensaje por tipo de error al entrar (contrato M1: 401 credenciales, 429 demasiados intentos). */
@@ -19,15 +20,20 @@ const MENSAJE_ERROR: Record<TipoErrorApi, string> = {
 
 @Component({
   selector: 'app-acceso',
+  imports: [EncabezadoComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './acceso.page.html',
   styles: `
-    .acceso-intro {
-      font-size: 1.1rem;
+    .tarjeta-acceso {
+      margin-top: var(--espacio-2);
+      padding: var(--espacio-5);
+    }
+    .tarjeta-acceso h2 {
+      margin-top: 0;
     }
     .acceso-ejemplo {
-      margin-top: 24px;
-      font-size: 0.95rem;
+      margin-top: var(--espacio-4);
+      font-size: var(--texto-chico);
     }
   `,
 })

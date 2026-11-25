@@ -17,8 +17,8 @@ type Borrador =
   | { tipo: 'incidencia'; incidencia: TipoIncidencia | null; ocurrioEn: string; permiso: EstadoPermisoUbicacion; explicar: boolean };
 
 /**
- * Acciones del operador sobre UN viaje: el siguiente paso (grande), los demás pasos hacia adelante (para saltar) y
- * "Reportar incidencia". Pide confirmar; guarda en la cola; nunca espera al GPS más de lo debido.
+ * Acciones del operador sobre UN viaje: el siguiente paso (botón grande), "Otro paso" (los demás pasos hacia adelante,
+ * para saltar) e "Incidencia". Pide confirmar; guarda en la cola; nunca espera al GPS más de lo debido.
  */
 @Component({
   selector: 'app-panel-avance',
@@ -59,6 +59,8 @@ export class PanelAvanceComponent {
     return pasosOperador(v).find((e) => rango(v.tipo, e) === rango(v.tipo, g.estatus)) ?? null;
   });
 
+  /** Hoja "Otro paso": los pasos hacia adelante que se pueden saltar. */
+  protected readonly eligiendoPaso = signal(false);
   protected readonly borrador = signal<Borrador | null>(null);
   protected readonly nota = signal('');
   protected readonly intentoEnvio = signal(false);
@@ -76,6 +78,11 @@ export class PanelAvanceComponent {
     const ocurrioEn = ahoraIsoUtc();
     const { permiso, explicar } = await this.permisos();
     this.abrir({ tipo: 'estatus', estatus, saltados, ocurrioEn, permiso, explicar });
+  }
+
+  protected elegirOtroPaso(estatus: EstatusViaje): void {
+    this.eligiendoPaso.set(false);
+    void this.pedirEstatus(estatus);
   }
 
   protected async pedirIncidencia(): Promise<void> {

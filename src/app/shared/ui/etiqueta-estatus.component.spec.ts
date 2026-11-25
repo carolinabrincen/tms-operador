@@ -3,7 +3,7 @@ import { EstatusViaje } from '../../core/api/operador-api.modelos';
 import { presentacionEstatus } from '../utils/estatus-viaje.util';
 import { ESCALA_ETIQUETA, EtiquetaEstatusComponent } from './etiqueta-estatus.component';
 
-async function montar(estatus: EstatusViaje, tamano?: 'grande' | 'mediano', marca?: string) {
+async function montar(estatus: EstatusViaje, tamano?: 'encabezado' | 'grande' | 'mediano', marca?: string) {
   const f = TestBed.createComponent(EtiquetaEstatusComponent);
   f.componentRef.setInput('estatus', estatus);
   if (tamano) f.componentRef.setInput('tamano', tamano);
@@ -40,6 +40,15 @@ describe('EtiquetaEstatusComponent: el estatus, grande y con su color', () => {
 
   it('con aclaración (p. ej. hito por confirmar)', async () => {
     const el = await montar('Documentado', 'grande', 'Pendiente de confirmar por oficina');
+    expect(el.querySelector('.etiqueta-marca')!.textContent).toBe('Pendiente de confirmar por oficina');
+  });
+
+  it('en el encabezado azul: blanco y sin fondo propio (el azul es el fondo), 30 px', async () => {
+    const el = await montar('EnTransito', 'encabezado', 'Pendiente de confirmar por oficina');
+    expect(el.classList).toContain('etiqueta-encabezado');
+    expect(el.style.backgroundColor).toBe('');
+    expect(el.style.color).toBe('');
+    expect(ESCALA_ETIQUETA.encabezado * 16).toBe(30);
     expect(el.querySelector('.etiqueta-marca')!.textContent).toBe('Pendiente de confirmar por oficina');
   });
 });

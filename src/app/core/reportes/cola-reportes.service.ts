@@ -60,6 +60,7 @@ export class ColaReportesService {
   private repetir = false;
   private temporizador: ReturnType<typeof setTimeout> | null = null;
   private pidioPersistencia = false;
+  private readonly oyentesCambioId = new Set<(viejo: string, nuevo: string) => Promise<void> | void>();
 
   /** Reportes del operador con sesión, lo más reciente primero. */
   readonly reportes = computed(() => {
@@ -86,6 +87,15 @@ export class ColaReportesService {
       baja();
       this.cancelarReintento();
     });
+  }
+
+  /**
+   * Avisa cuando un reporte cambia de id (409 de id duplicado). Lo usa la cola de fotos: la foto del acuse ligada al
+   * Descargado debe seguir al id nuevo. Devuelve la función para dejar de escuchar.
+   */
+  alCambiarId(oyente: (viejo: string, nuevo: string) => Promise<void> | void): () => void {
+    this.oyentesCambioId.add(oyente);
+    return () => this.oyentesCambioId.delete(oyente);
   }
 
   /** Espera a que se haya leído la cola guardada (útil en pruebas y al arrancar). */
@@ -219,6 +229,13 @@ export class ColaReportesService {
     await this.almacen.guardar(nuevo); // primero el nuevo, para no quedarse sin ninguno
     await this.almacen.eliminar(r.id);
     this.todosSig.update((lista) => [...lista.filter((x) => x.id !== r.id), nuevo]);
+    for (const oyente of this.oyentesCambioId) {
+      try {
+        await oyente(r.id, nuevo.id);
+      } catch {
+        // Un oyente que falla no detiene el envío de reportes.
+      }
+    }
   }
 
   private agendarReintento(intentos: number): void {

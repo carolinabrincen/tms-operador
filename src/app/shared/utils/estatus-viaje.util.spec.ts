@@ -1,6 +1,7 @@
 import { salidaEjemplo } from '../../core/api/ejemplo/datos-ejemplo';
 import { EstatusViaje, ReporteOperador, ResultadoReporte, Viaje, ViajeCargado, ViajeVacio } from '../../core/api/operador-api.modelos';
 import {
+  avanceViaje,
   BOTON_ESTATUS,
   ETIQUETA_ESTATUS,
   PASOS_CARGADO,
@@ -194,5 +195,17 @@ describe('estatus-viaje.util: estatus del viaje y pasos del operador', () => {
     expect(ETIQUETA_ESTATUS.EnTransitoVacio).toBe('En tránsito (vacío)');
     expect(tituloViaje(cargado1)).toBe('Viaje 2 · Cargado · Apodaca, N.L. → Saltillo, Coah.');
     expect(tituloViaje(regresoTaller)).toBe('Viaje 4 · Vacío · San Luis Potosí, S.L.P. → Taller Diésel del Norte, Guadalupe, N.L.');
+  });
+
+  it('avance para la barra: un segmento por paso del operador; llenos los hechos (servidor o reportes); cerrado lleno; cancelado sin barra', () => {
+    const s = salidaEjemplo(new Date('2026-11-23T16:00:00Z'));
+    const cargado = s.viajes[1];
+    expect(avanceViaje(cargado, [])).toEqual({ total: 8, hechos: 0 });
+    expect(avanceViaje({ ...cargado, estatus: 'EnCarga' } as Viaje, [])).toEqual({ total: 8, hechos: 3 });
+    const reporte = { reporte: { tipo: 'estatus', id: 'r', viajeId: cargado.id, estatus: 'Documentado', ocurrioEn: 't', ubicacion: null, nota: null }, estado: 'por-confirmar', resultado: 'por-confirmar' } as const;
+    expect(avanceViaje(cargado, [reporte as never])).toEqual({ total: 8, hechos: 4 });
+    expect(avanceViaje({ ...cargado, estatus: 'Cerrado' } as Viaje, [])).toEqual({ total: 8, hechos: 8 });
+    expect(avanceViaje({ ...cargado, estatus: 'Cancelado' } as Viaje, [])).toBeNull();
+    expect(avanceViaje(s.viajes[0], [])).toEqual({ total: 2, hechos: 0 });
   });
 });

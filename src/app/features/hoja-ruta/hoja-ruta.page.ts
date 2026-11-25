@@ -3,6 +3,7 @@ import { RouterLink } from '@angular/router';
 import { ConexionService } from '../../core/conexion/conexion.service';
 import { HojaRutaService } from '../../core/hoja-ruta/hoja-ruta.service';
 import { MensajesService } from '../../core/mensajes/mensajes.service';
+import { EncabezadoComponent } from '../../shared/ui/encabezado.component';
 import { AsignacionService } from '../../core/viaje/asignacion.service';
 import { textoMotivo } from '../../shared/utils/estatus-viaje.util';
 import { avisoOtraSalida, detalleLugar, fechaSinHora, ligaTelefono, textoKm, textoParada, textoTiempo, textoToneladas } from '../../shared/utils/hoja-ruta.util';
@@ -11,7 +12,7 @@ import { TEXTO_ZONA_NEGOCIO, fechaHoraNegocio } from '../../shared/utils/zona-ne
 /** Hoja de ruta de la salida activa (contrato M2, sección 1). Sin importes. Se puede ver sin señal. Ruta /hoja-ruta. */
 @Component({
   selector: 'app-hoja-ruta',
-  imports: [RouterLink],
+  imports: [RouterLink, EncabezadoComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './hoja-ruta.page.html',
   styles: `
@@ -20,7 +21,25 @@ import { TEXTO_ZONA_NEGOCIO, fechaHoraNegocio } from '../../shared/utils/zona-ne
       gap: 8px;
     }
     .tramo h3 {
-      margin: 0 0 4px;
+      margin: 0 0 var(--espacio-2);
+    }
+    .tramo h4 {
+      margin: var(--espacio-4) 0 var(--espacio-1);
+      font-size: var(--texto-chico);
+      color: var(--c-texto-suave);
+    }
+    .lugar {
+      padding: var(--espacio-2) 0;
+      border-top: 1px solid var(--c-borde);
+    }
+    .lugar span {
+      font-size: var(--texto-chico);
+    }
+    .abrir-mapa {
+      margin-top: var(--espacio-4);
+    }
+    .generada {
+      font-size: var(--texto-chico);
     }
     .lugar {
       margin: 0 0 8px;

@@ -6,39 +6,75 @@ import { MensajesService } from '../../core/mensajes/mensajes.service';
 import { ColaReportesService } from '../../core/reportes/cola-reportes.service';
 import { AsignacionService } from '../../core/viaje/asignacion.service';
 import { activarRefrescoDelViaje } from '../../core/viaje/refresco-viaje';
+import { BarraAvanceComponent } from '../../shared/ui/barra-avance.component';
 import { DatosViajeComponent } from '../../shared/ui/datos-viaje.component';
+import { EncabezadoComponent } from '../../shared/ui/encabezado.component';
 import { EtiquetaEstatusComponent } from '../../shared/ui/etiqueta-estatus.component';
 import { LineaTiempoComponent } from '../../shared/ui/linea-tiempo.component';
 import { PanelAvanceComponent } from '../../shared/ui/panel-avance.component';
 import { SugerenciaAcuseComponent } from '../../shared/ui/sugerencia-acuse.component';
+import { TrayectoComponent } from '../../shared/ui/trayecto.component';
 import { Guia, guia, marcaDeGuia, origenDestino, viajeActivo, viajeQueToca, viajesEnOrden } from '../../shared/utils/estatus-viaje.util';
 import { lineaDeTiempo } from '../../shared/utils/linea-tiempo.util';
 import { cuandoNegocio } from '../../shared/utils/zona-negocio.util';
 
 @Component({
   selector: 'app-mi-viaje',
-  imports: [RouterLink, PanelAvanceComponent, DatosViajeComponent, LineaTiempoComponent, EtiquetaEstatusComponent, SugerenciaAcuseComponent],
+  imports: [
+    RouterLink,
+    EncabezadoComponent,
+    BarraAvanceComponent,
+    TrayectoComponent,
+    PanelAvanceComponent,
+    DatosViajeComponent,
+    LineaTiempoComponent,
+    EtiquetaEstatusComponent,
+    SugerenciaAcuseComponent,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './mi-viaje.page.html',
   styles: `
-    .ahora-etiqueta {
-      font-size: 0.95rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
+    /* Dentro del encabezado azul. */
+    .enc-titulo-viaje {
       margin: 0;
+      font-size: 1rem;
+      font-weight: var(--peso-medio);
+      color: var(--c-sobre-primario);
+    }
+    .enc-estatus {
+      margin-top: var(--espacio-4);
+    }
+    .enc-rotulo {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--espacio-2);
+      margin: 0 0 var(--espacio-1);
+      font-size: var(--texto-chico);
+      color: var(--c-sobre-primario-suave);
+    }
+    .ahora-etiqueta {
+      padding: 2px 10px;
+      border-radius: var(--radio-pildora);
+      border: 1px solid var(--c-sobre-primario-borde);
+      color: var(--c-sobre-primario);
+      font-size: var(--texto-chico);
+      font-weight: var(--peso-medio);
     }
     .viaje-enlace {
       display: block;
       color: inherit;
       text-decoration: none;
+      font-weight: var(--peso-normal);
     }
     .ver-hoja-ruta {
-      margin-bottom: 16px;
+      margin: var(--espacio-2) 0 var(--espacio-4);
     }
     .actualizado {
-      margin-top: 8px;
+      margin-top: var(--espacio-2);
       text-align: center;
+      font-size: var(--texto-chico);
     }
   `,
 })

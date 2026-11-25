@@ -183,6 +183,27 @@ export function conReenvioFoto(f: EvidenciaLocal): EvidenciaLocal {
   return f.estado === 'enviada' && f.foto ? { ...f, estado: 'pendiente', error: null } : f;
 }
 
+/**
+ * Liga de la foto al enviarla: si el reporte ligado ya no existe en el teléfono o no fue aceptado ("No aceptado"), la
+ * foto va SIN liga (importa más que llegue). Sin cambios = el mismo objeto.
+ */
+export function sinLigaPerdida(f: EvidenciaLocal, reportes: readonly ReporteParaFoto[]): EvidenciaLocal {
+  const id = f.datos.reporteId;
+  if (!id) return f;
+  const r = reportes.find((x) => x.id === id);
+  return r && r.estado !== 'rechazado' ? f : sinLiga(f);
+}
+
+/** La misma foto sin liga a un reporte. */
+export function sinLiga(f: EvidenciaLocal): EvidenciaLocal {
+  return { ...f, datos: { ...f.datos, reporteId: null } };
+}
+
+/** El reporte ligado cambió de id (409 de id duplicado): la foto sigue al id nuevo. Sin cambios = el mismo objeto. */
+export function conLigaNueva(f: EvidenciaLocal, viejo: string, nuevo: string): EvidenciaLocal {
+  return f.datos.reporteId === viejo ? { ...f, datos: { ...f.datos, reporteId: nuevo } } : f;
+}
+
 /** Lo más reciente primero. */
 export function fotosRecientes(fotos: readonly EvidenciaLocal[]): EvidenciaLocal[] {
   return [...fotos].sort((a, b) => b.creadoEn.localeCompare(a.creadoEn) || b.id.localeCompare(a.id));

@@ -108,8 +108,8 @@ const FUTURO_MAXIMO_MS = 10 * 60 * 1000;
       width: 100%;
       max-height: 40vh;
       object-fit: contain;
-      border-radius: 8px;
-      margin: 0 0 12px;
+      border-radius: var(--radio-boton);
+      margin: 0 0 var(--espacio-3);
       background: #000;
     }
     .opciones {
@@ -119,7 +119,7 @@ const FUTURO_MAXIMO_MS = 10 * 60 * 1000;
       margin-bottom: 12px;
     }
     .etiqueta-campo {
-      font-weight: 700;
+      font-weight: var(--peso-medio);
       margin: 12px 0 6px;
     }
   `,

@@ -30,7 +30,7 @@ interface FotoVista {
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="evidencias" aria-labelledby="titulo-evidencias-{{ viaje().id }}">
-      <h2 id="titulo-evidencias-{{ viaje().id }}">Fotos de evidencia</h2>
+      <h2 class="titulo-seccion" id="titulo-evidencias-{{ viaje().id }}">Fotos de evidencia</h2>
 
       @if (admite()) {
         <app-sugerencia-acuse [viajes]="[viaje()]" />
@@ -55,7 +55,7 @@ interface FotoVista {
       } @else if (errorGaleria()) {
         <p class="alerta alerta-aviso galeria-error" role="status">{{ errorGaleria() }}</p>
       } @else if (galeria().length === 0) {
-        <p class="texto-suave galeria-vacia">Todavía no hay fotos de este viaje en la oficina.</p>
+        <p class="estado-vacio galeria-vacia">Todavía no hay fotos de este viaje en la oficina.</p>
       }
       @for (e of galeria(); track e.id) {
         <article class="tarjeta galeria-item" [class.de-oficina]="e.autor === 'oficina'">
@@ -103,7 +103,7 @@ interface FotoVista {
       font-size: 1.05rem;
     }
     .foto-oficina {
-      font-weight: 700;
+      font-weight: var(--peso-medio);
       margin: 6px 0 0;
     }
     .foto-servidor {
@@ -111,8 +111,8 @@ interface FotoVista {
       width: 100%;
       max-height: 60vh;
       object-fit: contain;
-      border-radius: 8px;
-      margin-top: 8px;
+      border-radius: var(--radio-boton);
+      margin-top: var(--espacio-2);
       background: #000;
     }
   `,

@@ -21,14 +21,26 @@ async function montar(v: Viaje) {
     [...el.querySelectorAll<HTMLButtonElement>(sel)].find((b) => b.textContent!.trim() === texto)!.click();
     await f.whenStable();
   };
-  return { f, el, textos, clic };
+  /** Abre la hoja "Otro paso" y devuelve los pasos que ofrece. */
+  const otrosPasos = async () => {
+    await clic('button.otro-paso', 'Otro paso');
+    return textos('.otros-lista button');
+  };
+  return { f, el, textos, clic, otrosPasos };
 }
 
 describe('PanelAvanceComponent: guía del operador sobre un viaje', () => {
-  it('siguiente paso grande; los demás hacia adelante en la lista para saltar; incidencia siempre visible', async () => {
-    const { textos } = await montar(cargado);
+  it('"Siguiente paso": botón principal con flecha; "Otro paso" (los demás hacia adelante) e "Incidencia" a la mitad', async () => {
+    const { el, textos, otrosPasos } = await montar(cargado);
+    expect(el.querySelector('.titulo-seccion')!.textContent).toBe('Siguiente paso');
     expect(textos('.paso-siguiente')).toEqual(['Voy a cargar']);
-    expect(textos('.otros-lista button')).toEqual([
+    const principal = el.querySelector('.paso-siguiente')!;
+    expect(principal.classList).toContain('btn-grande');
+    expect(principal.querySelector('svg')).not.toBeNull(); // la flecha, a la derecha
+    expect(textos('.secundarias button')).toEqual(['Otro paso', 'Incidencia']);
+    expect(el.querySelector('.secundarias')!.classList).not.toContain('una-sola');
+    expect(el.querySelector('.otros-lista')).toBeNull(); // la lista está en su hoja
+    expect(await otrosPasos()).toEqual([
       'Llegué a cargar',
       'Me están cargando',
       'Ya cargué y tengo documentos',
@@ -37,26 +49,35 @@ describe('PanelAvanceComponent: guía del operador sobre un viaje', () => {
       'Me están descargando',
       'Ya descargué',
     ]);
-    expect(textos('button.incidencia')).toEqual(['⚠ Reportar incidencia']);
+    expect(el.querySelector('#titulo-otro-paso')!.textContent).toBe('Otro paso (puede saltar)');
   });
 
   it('si la oficina ya avanzó el viaje, ya no ofrece los pasos anteriores', async () => {
-    const { textos, el } = await montar({ ...cargado, estatus: 'EnTransito' });
+    const { el, textos, otrosPasos } = await montar({ ...cargado, estatus: 'EnTransito' });
     expect(textos('.paso-siguiente')).toEqual(['Llegué a descargar']);
-    expect(textos('.otros-lista button')).toEqual(['Me están descargando', 'Ya descargué']);
+    expect(await otrosPasos()).toEqual(['Me están descargando', 'Ya descargué']);
     // El renglón chico "Estatus: …" ya no está en el panel: el estatus lo muestra la pantalla, en grande.
     expect(el.textContent).not.toContain('Estatus:');
   });
 
   it('vacío cuyo último tramo es a Taller: "Salí" y después "Llegué al taller"', async () => {
-    const { textos } = await montar(taller);
+    const { textos, otrosPasos } = await montar(taller);
     expect(textos('.paso-siguiente')).toEqual(['Salí']);
-    expect(textos('.otros-lista button')).toEqual(['Llegué al taller']);
+    expect(await otrosPasos()).toEqual(['Llegué al taller']);
+  });
+
+  it('sin otros pasos que saltar: "Incidencia" ocupa todo el ancho', async () => {
+    const { el, textos } = await montar({ ...cargado, estatus: 'EnDescarga' });
+    expect(textos('.paso-siguiente')).toEqual(['Ya descargué']);
+    expect(textos('.secundarias button')).toEqual(['Incidencia']);
+    expect(el.querySelector('.secundarias')!.classList).toContain('una-sola');
   });
 
   it('saltar pasos avisa cuáles se saltan; al confirmar se guarda el reporte', async () => {
-    const { el, clic } = await montar(cargado);
+    const { el, clic, otrosPasos } = await montar(cargado);
+    await otrosPasos();
     await clic('.otros-lista button', 'Me están cargando');
+    expect(el.querySelector('.otros-lista')).toBeNull(); // se cierra la hoja de pasos
     expect(el.querySelector('.hoja h2')!.textContent).toContain('¿Reportar “Me están cargando”?');
     expect(el.querySelector('.hoja .alerta-aviso')!.textContent).toContain('Se saltará: Voy a cargar, Llegué a cargar.');
     await clic('.hoja button', 'Enviar reporte');
@@ -73,7 +94,7 @@ describe('PanelAvanceComponent: guía del operador sobre un viaje', () => {
 
   it('incidencia "Otro" sin nota: mensaje visible y no se guarda; con nota sí', async () => {
     const { el, clic, f } = await montar(cargado);
-    await clic('button.incidencia', '⚠ Reportar incidencia');
+    await clic('button.incidencia', 'Incidencia');
     await clic('.opciones button', 'Otro');
     await clic('.hoja button', 'Enviar reporte');
     expect(el.querySelector('.hoja .campo-error')!.textContent).toBe('En “Otro” escriba en la nota qué pasó.');

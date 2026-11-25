@@ -1,33 +1,24 @@
 .panel {
   display: grid;
-  gap: 12px;
-  margin: 12px 0 4px;
+  gap: var(--espacio-3);
+  margin: 0 0 var(--espacio-2);
 }
-.paso-siguiente {
-  min-height: 72px;
-  font-size: 1.35rem;
+.panel .titulo-seccion {
+  margin: var(--espacio-2) 0 0;
 }
 .paso-nota {
-  margin: -4px 0 0;
+  margin: calc(-1 * var(--espacio-1)) 0 0;
+  font-size: var(--texto-chico);
 }
-.otros-pasos summary {
-  display: flex;
-  align-items: center;
-  min-height: 48px;
-  font-weight: 700;
-  color: var(--c-primario);
-  cursor: pointer;
-}
-.otros-lista,
-.opciones {
+/* "Otro paso" e "Incidencia", a la mitad cada uno. */
+.secundarias {
   display: grid;
-  gap: 10px;
-  margin: 8px 0;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--espacio-3);
 }
-.incidencia {
-  border-color: #7a5b00;
-  background: var(--c-aviso-fondo);
+.secundarias.una-sola {
+  grid-template-columns: 1fr;
 }
 .hoja-viaje {
-  margin-top: 12px;
+  margin-top: var(--espacio-3);
 }

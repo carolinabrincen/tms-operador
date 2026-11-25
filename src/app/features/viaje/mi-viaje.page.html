@@ -1,5 +1,28 @@
+@if (activo(); as v) {
+  <app-encabezado [principal]="true">
+    <div enc-arriba class="enc-viaje">
+      <h1 class="enc-titulo-viaje">Viaje {{ v.orden }} de {{ viajes().length }} · {{ v.tipo === 'cargado' ? 'Cargado' : 'Vacío' }}</h1>
+    </div>
+    <div class="enc-estatus">
+      <p class="enc-rotulo">
+        Estatus actual
+        <span class="ahora-etiqueta">{{ v === toca() ? 'Le toca' : 'Esperando a la oficina' }}</span>
+      </p>
+      <app-etiqueta-estatus [estatus]="guiaDe(v).estatus" [marca]="marcaDe(v)" tamano="encabezado" />
+      <app-barra-avance [viaje]="v" [sobreAzul]="true" />
+    </div>
+  </app-encabezado>
+} @else {
+  <app-encabezado titulo="Mi viaje" />
+}
+
 <main class="pagina">
-  <h1>Mi viaje</h1>
+  @if (activo(); as v) {
+    <!-- Primero: se monta sobre el borde inferior del encabezado. -->
+    <section class="tarjeta tarjeta-montada tarjeta-viaje" aria-label="Origen y destino">
+      <app-trayecto [viaje]="v" />
+    </section>
+  }
 
   @if (error()) {
     <p class="alerta" [class.alerta-aviso]="asignacion()" [class.alerta-error]="!asignacion()" role="status">{{ error() }}</p>
@@ -11,16 +34,10 @@
     }
   } @else {
     @if (activo(); as v) {
-      <section class="tarjeta tarjeta-destacada" aria-labelledby="titulo-ahora">
-        <p class="ahora-etiqueta">{{ v === toca() ? 'Le toca' : 'Esperando a la oficina' }}</p>
-        <h2 id="titulo-ahora">Viaje {{ v.orden }} · {{ v.tipo === 'cargado' ? 'Cargado' : 'Vacío' }}</h2>
-        <app-etiqueta-estatus [estatus]="guiaDe(v).estatus" [marca]="marcaDe(v)" />
-        <p class="ruta">{{ ruta(v).origen }} → {{ ruta(v).destino }}</p>
-        <app-panel-avance [viaje]="v" />
-      </section>
+      <app-panel-avance [viaje]="v" />
 
       <section class="tarjeta" aria-label="Datos del viaje">
-        <app-datos-viaje [viaje]="v" />
+        <app-datos-viaje [viaje]="v" [omitirTrayecto]="true" />
       </section>
 
       <app-linea-tiempo [entradas]="linea()" />
@@ -36,10 +53,13 @@
 
     @if (salida(); as s) {
       <app-sugerencia-acuse [viajes]="viajes()" />
-      <a routerLink="/hoja-ruta" class="btn btn-secundario btn-bloque ver-hoja-ruta">🗺 Ver hoja de ruta</a>
+      <a routerLink="/hoja-ruta" class="btn btn-secundario btn-bloque ver-hoja-ruta">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14" /></svg>
+        Ver hoja de ruta
+      </a>
 
       @if (viajes().length > 1) {
-        <h2>Viajes de esta salida</h2>
+        <h2 class="titulo-seccion">Viajes de esta salida</h2>
         @for (v of viajes(); track v.id) {
           <a class="tarjeta viaje-enlace" [class.tarjeta-apagada]="v.estatus === 'Cerrado' || v.estatus === 'Cancelado'" [routerLink]="['/viaje', v.id]">
             <div class="tarjeta-cabeza">

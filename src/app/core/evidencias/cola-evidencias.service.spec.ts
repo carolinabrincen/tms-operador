@@ -218,4 +218,65 @@ describe('ColaEvidenciasService: fotos guardadas primero, subidas después, sin 
     TestBed.inject(AlmacenSesion).limpiar();
     await expect(cola.registrar(nueva())).rejects.toThrow('No hay sesión');
   });
+
+  describe('foto del acuse ligada al Descargado', () => {
+    const descargado = () =>
+      TestBed.inject(ColaReportesService).registrar({
+        tipo: 'estatus',
+        viajeId: CARGADO,
+        estatus: 'Descargado',
+        ocurrioEn: '2026-11-23T16:00:00Z',
+        ubicacion: null,
+        nota: null,
+        resumen: 'Viaje 2',
+      });
+
+    it('si el Descargado cambia de id por un 409, la foto usa el id NUEVO (en memoria, en el teléfono y al enviarse)', async () => {
+      const reportes = TestBed.inject(ColaReportesService);
+      ponerEnLinea(e, false);
+      const r = await descargado();
+      const foto = await cola.registrar(nueva(1, 'AcuseRecibido', { reporteId: r.id }));
+      // Al volver la señal, el primer envío del reporte choca (409 de id duplicado) y se le da otro id.
+      vi.spyOn(api, 'enviarReporte').mockRejectedValueOnce(new ErrorApiOperador('id-duplicado', 'x', 'DESPACHO_EVENTO_CLAVE_DUPLICADA', 409));
+      const subir = vi.spyOn(api, 'subirEvidencia');
+      ponerEnLinea(e, true);
+      await vi.waitFor(() => expect(reportes.reportes()[0]?.estado).toBe('por-confirmar'));
+      const idNuevo = reportes.reportes()[0].id;
+      expect(idNuevo).not.toBe(r.id);
+      await vi.waitFor(() => expect(cola.fotos()[0].estado).toBe('enviada'));
+      expect(cola.fotos()[0].datos.reporteId).toBe(idNuevo);
+      expect((await enDisco()).find((f) => f.id === foto.id)!.datos.reporteId).toBe(idNuevo);
+      expect(subir.mock.calls.at(-1)![1].reporteId).toBe(idNuevo);
+    });
+
+    it('si el reporte ligado no fue aceptado ("No aceptado"), la foto se envía sin liga', async () => {
+      vi.spyOn(api, 'enviarReporte').mockRejectedValueOnce(new ErrorApiOperador('rechazado', 'No.', 'DESPACHO_EVENTO_INVALIDO', 400));
+      const r = await descargado();
+      await TestBed.inject(ColaReportesService).inactivo();
+      expect(TestBed.inject(ColaReportesService).reportes()[0].estado).toBe('rechazado');
+      const subir = vi.spyOn(api, 'subirEvidencia');
+      await cola.registrar(nueva(1, 'AcuseRecibido', { reporteId: r.id }));
+      await vi.waitFor(() => expect(cola.fotos()[0].estado).toBe('enviada'));
+      expect(subir.mock.calls[0][1].reporteId).toBeNull();
+      expect(cola.fotos()[0].datos.reporteId).toBeNull();
+    });
+
+    it('si el reporte ligado ya no existe en el teléfono, la foto se envía sin liga', async () => {
+      const subir = vi.spyOn(api, 'subirEvidencia');
+      await cola.registrar(nueva(1, 'AcuseRecibido', { reporteId: 'ya-no-existe' }));
+      await vi.waitFor(() => expect(cola.fotos()[0].estado).toBe('enviada'));
+      expect(subir.mock.calls[0][1].reporteId).toBeNull();
+    });
+
+    it('si el servidor rechaza la liga (VIAJE_EVIDENCIA_INVALIDA), se reintenta sin liga y llega', async () => {
+      const r = await descargado();
+      await TestBed.inject(ColaReportesService).inactivo();
+      const subir = vi
+        .spyOn(api, 'subirEvidencia')
+        .mockRejectedValueOnce(new ErrorApiOperador('rechazado', 'reporteId inválido', CODIGOS_EVIDENCIA.invalida, 400));
+      await cola.registrar(nueva(1, 'AcuseRecibido', { reporteId: r.id }));
+      await vi.waitFor(() => expect(cola.fotos()[0].estado).toBe('enviada'));
+      expect(subir.mock.calls.map((c) => c[1].reporteId)).toEqual([r.id, null]);
+    });
+  });
 });

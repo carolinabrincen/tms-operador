@@ -1,6 +1,9 @@
+<app-encabezado [titulo]="marca.nombre" />
+
 <main class="pagina">
-  <h1>Bienvenido</h1>
-  <p class="acceso-intro">Entre con su número de celular y el PIN que le dio la oficina.</p>
+  <section class="tarjeta tarjeta-acceso">
+  <h2>Bienvenido</h2>
+  <p class="acceso-intro texto-suave">Entre con su número de celular y el PIN que le dio la oficina.</p>
 
   @if (aviso()) {
     <p class="alerta alerta-aviso" role="status">{{ aviso() }}</p>
@@ -59,6 +62,7 @@
       {{ entrando() ? 'Entrando…' : 'Entrar' }}
     </button>
   </form>
+  </section>
 
   @if (esEjemplo) {
     <p class="alerta alerta-info acceso-ejemplo">

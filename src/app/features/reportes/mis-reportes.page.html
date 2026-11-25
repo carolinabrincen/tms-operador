@@ -1,5 +1,6 @@
+<app-encabezado titulo="Mis reportes" volver="/viaje" />
+
 <main class="pagina">
-  <h1>Mis reportes</h1>
 
   @if (!cola.persistente()) {
     <p class="alerta alerta-aviso">
@@ -34,7 +35,7 @@
   @for (r of cola.reportes(); track r.id) {
     <app-reporte-item [reporte]="r" />
   } @empty {
-    <p class="tarjeta">Aún no ha reportado avances. Para reportar, vaya a <a routerLink="/viaje">Mi viaje</a>.</p>
+    <p class="estado-vacio">Aún no ha reportado avances. Para reportar, vaya a <a routerLink="/viaje">Mi viaje</a>.</p>
   }
 
   @if (cola.reportes().length) {

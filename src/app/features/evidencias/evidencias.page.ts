@@ -4,6 +4,7 @@ import { ConexionService } from '../../core/conexion/conexion.service';
 import { ColaEvidenciasService } from '../../core/evidencias/cola-evidencias.service';
 import { MensajesService } from '../../core/mensajes/mensajes.service';
 import { AsignacionService } from '../../core/viaje/asignacion.service';
+import { EncabezadoComponent } from '../../shared/ui/encabezado.component';
 import { FotoItemComponent } from '../../shared/ui/foto-item.component';
 import { ETIQUETA_ESTADO_FOTO, textoFotosPendientes } from '../../shared/utils/evidencias.util';
 import { viajesEnOrden } from '../../shared/utils/estatus-viaje.util';
@@ -11,11 +12,11 @@ import { viajesEnOrden } from '../../shared/utils/estatus-viaje.util';
 /** Las fotos de evidencia guardadas en este teléfono, con su estado, y acceso a los viajes cargados. Ruta /evidencias. */
 @Component({
   selector: 'app-evidencias',
-  imports: [RouterLink, FotoItemComponent],
+  imports: [RouterLink, EncabezadoComponent, FotoItemComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+    <app-encabezado titulo="Evidencias" volver="/viaje" />
     <main class="pagina">
-      <h1>Evidencias</h1>
       <p class="texto-suave">Las fotos se guardan primero en el teléfono y se envían solas cuando hay señal.</p>
 
       @if (cargados().length) {
@@ -52,7 +53,7 @@ import { viajesEnOrden } from '../../shared/utils/estatus-viaje.util';
         </ul>
         <p class="texto-suave">La app no anula fotos. Si subió una por error, avise a la oficina.</p>
       } @else {
-        <p class="texto-suave sin-fotos">Todavía no ha tomado fotos de evidencia en este teléfono.</p>
+        <p class="estado-vacio sin-fotos">Todavía no ha tomado fotos de evidencia en este teléfono.</p>
       }
     </main>
   `,
@@ -60,9 +61,9 @@ import { viajesEnOrden } from '../../shared/utils/estatus-viaje.util';
     .leyenda {
       display: flex;
       flex-wrap: wrap;
-      gap: 8px;
+      gap: var(--espacio-2);
       padding: 0;
-      margin: 16px 0;
+      margin: var(--espacio-4) 0;
       list-style: none;
     }
     .ir-viaje {

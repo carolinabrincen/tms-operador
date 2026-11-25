@@ -1,18 +1,19 @@
-import { ChangeDetectionStrategy, Component, effect, inject, signal, untracked } from '@angular/core';
+import { ChangeDetectionStrategy, Component, effect, inject, untracked } from '@angular/core';
 import { Title } from '@angular/platform-browser';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
-import { OPERADOR_API } from './core/api/operador-api';
 import { MARCA } from './core/config/marca';
-import { ConexionService } from './core/conexion/conexion.service';
 import { ColaEvidenciasService } from './core/evidencias/cola-evidencias.service';
 import { MensajesService } from './core/mensajes/mensajes.service';
-import { RelojTelefonoService } from './core/reloj/reloj-telefono.service';
 import { ColaReportesService } from './core/reportes/cola-reportes.service';
 import { AlmacenSesion } from './core/sesion/almacen-sesion';
-import { SesionService } from './core/sesion/sesion.service';
+import { SalidaService } from './core/sesion/salida.service';
 import { textoPendientes } from './shared/utils/cola-reportes.util';
 import { textoFotosPendientes } from './shared/utils/evidencias.util';
 
+/**
+ * Armazón: la pantalla de la ruta, el menú inferior, los mensajes y la confirmación de "Salir". El encabezado azul
+ * (con "Salir", "Datos de ejemplo" y los avisos de conexión y pendientes) lo pone cada pantalla con app-encabezado.
+ */
 @Component({
   selector: 'app-root',
   imports: [RouterOutlet, RouterLink, RouterLinkActive],
@@ -22,19 +23,11 @@ import { textoFotosPendientes } from './shared/utils/evidencias.util';
 })
 export class App {
   private readonly router = inject(Router);
-  private readonly sesionService = inject(SesionService);
-  protected readonly marca = MARCA;
   protected readonly sesion = inject(AlmacenSesion).sesion;
-  protected readonly enLinea = inject(ConexionService).enLinea;
   protected readonly cola = inject(ColaReportesService);
   protected readonly fotos = inject(ColaEvidenciasService);
   protected readonly mensajes = inject(MensajesService);
-  protected readonly esEjemplo = inject(OPERADOR_API).esEjemplo;
-  protected readonly confirmandoSalida = signal(false);
-  /** Mientras se avisa al servidor que se cierra la sesión (unos segundos a lo más). */
-  protected readonly saliendo = signal(false);
-  /** Hora del teléfono mal puesta: el servidor rechaza reportes con más de 10 minutos en el futuro. */
-  protected readonly avisoReloj = inject(RelojTelefonoService).aviso;
+  protected readonly salida = inject(SalidaService);
   protected readonly textoPendientes = textoPendientes;
   protected readonly textoFotosPendientes = textoFotosPendientes;
 
@@ -51,16 +44,5 @@ export class App {
 
   protected proximamente(nombre: string): void {
     this.mensajes.mostrar(`${nombre}: próximamente. Esta función todavía no está disponible.`, 'info');
-  }
-
-  protected async salir(): Promise<void> {
-    this.confirmandoSalida.set(false);
-    if (this.saliendo()) return;
-    this.saliendo.set(true);
-    try {
-      await this.sesionService.salir();
-    } finally {
-      this.saliendo.set(false);
-    }
   }
 }

@@ -252,3 +252,21 @@ export function tituloViaje(v: Viaje): string {
   const { origen, destino } = origenDestino(v);
   return `Viaje ${v.orden} · ${v.tipo === 'cargado' ? 'Cargado' : 'Vacío'} · ${origen} → ${destino}`;
 }
+
+/** Avance para la barra de pasos: un segmento por paso del operador; llenos los ya hechos. */
+export interface AvanceViaje {
+  total: number;
+  hechos: number;
+}
+
+/**
+ * Cuántos pasos del operador ya están hechos (según el estatus efectivo: servidor o lo que ya reportó). Cerrado = todos.
+ * Cancelado no tiene avance que mostrar (null).
+ */
+export function avanceViaje(v: Viaje, reportes: readonly ReporteParaGuia[]): AvanceViaje | null {
+  if (v.estatus === 'Cancelado') return null;
+  const pasos = pasosOperador(v);
+  if (v.estatus === 'Cerrado') return { total: pasos.length, hechos: pasos.length };
+  const actual = rango(v.tipo, guia(v, reportes).estatus);
+  return { total: pasos.length, hechos: pasos.filter((e) => rango(v.tipo, e) <= actual).length };
+}

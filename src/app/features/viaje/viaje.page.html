@@ -1,10 +1,16 @@
-<main class="pagina">
-  <a routerLink="/viaje" class="enlace-volver">‹ Mi viaje</a>
+<app-encabezado [titulo]="titulo()" volver="/viaje" />
 
+<main class="pagina">
   @if (viaje(); as v) {
-    <h1>Viaje {{ v.orden }} · {{ v.tipo === 'cargado' ? 'Cargado' : 'Vacío' }}</h1>
-    <app-etiqueta-estatus [estatus]="guiaViaje()!.estatus" [marca]="marca()" />
-    <p class="ruta">{{ ruta(v).origen }} → {{ ruta(v).destino }}</p>
+    <section class="tarjeta tarjeta-estatus" aria-label="Estatus actual">
+      <p class="etiqueta-seccion">Estatus actual</p>
+      <app-etiqueta-estatus [estatus]="guiaViaje()!.estatus" [marca]="marca()" />
+      <app-barra-avance [viaje]="v" />
+    </section>
+
+    <section class="tarjeta" aria-label="Origen y destino">
+      <app-trayecto [viaje]="v" />
+    </section>
 
     @if (v.estatus !== 'Cerrado' && toca() && toca() !== v) {
       <p class="alerta alerta-aviso">
@@ -12,12 +18,10 @@
       </p>
     }
 
-    <section class="tarjeta">
-      <app-panel-avance [viaje]="v" />
-    </section>
+    <app-panel-avance [viaje]="v" />
 
     <section class="tarjeta" aria-label="Datos del viaje">
-      <app-datos-viaje [viaje]="v" />
+      <app-datos-viaje [viaje]="v" [omitirTrayecto]="true" />
     </section>
 
     @if (v.tipo === 'cargado') {

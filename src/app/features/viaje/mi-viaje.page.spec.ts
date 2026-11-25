@@ -6,6 +6,7 @@ import { AsignacionService } from '../../core/viaje/asignacion.service';
 import { configurar, crearEntorno, entrarComo } from '../../testing/entorno-pruebas';
 import { MiViajePage } from './mi-viaje.page';
 import { ViajePage } from './viaje.page';
+import { ESCALA_ETIQUETA } from '../../shared/ui/etiqueta-estatus.component';
 
 const OPERADOR = 'ej-op-8112345678';
 
@@ -40,17 +41,55 @@ describe('MiViajePage: el estatus actual es lo primero que se lee', () => {
     return f.nativeElement as HTMLElement;
   }
 
-  it('en "Le toca": título, luego la etiqueta grande del estatus, luego la ruta; sin el renglón chico "Estatus:"', async () => {
+  it('encabezado azul: "Viaje 1 de 4 · Vacío", "Estatus actual", el estatus en grande (30 px) y la barra de avance', async () => {
     const el = await montar();
-    const tarjeta = el.querySelector('.tarjeta-destacada')!;
-    const orden = [...tarjeta.children].map((n) => n.tagName.toLowerCase() + (n.classList.contains('ruta') ? '.ruta' : ''));
-    const iTitulo = orden.indexOf('h2');
-    expect(orden[iTitulo + 1]).toBe('app-etiqueta-estatus');
-    expect(orden[iTitulo + 2]).toBe('p.ruta');
-    const etiqueta = tarjeta.querySelector('app-etiqueta-estatus')!;
-    expect(etiqueta.classList).toContain('etiqueta-grande');
+    const enc = el.querySelector('app-encabezado.encabezado-principal')!;
+    expect(enc.querySelector('h1.enc-titulo-viaje')!.textContent!.trim()).toBe('Viaje 1 de 4 · Vacío');
+    expect(enc.querySelector('.enc-rotulo')!.textContent).toContain('Estatus actual');
+    expect(enc.querySelector('.ahora-etiqueta')!.textContent).toBe('Le toca');
+    const etiqueta = enc.querySelector<HTMLElement>('app-etiqueta-estatus')!;
+    expect(etiqueta.classList).toContain('etiqueta-encabezado');
     expect(etiqueta.textContent).toContain('Asignado');
-    expect(tarjeta.querySelector('app-panel-avance')!.textContent).not.toContain('Estatus:');
+    // De 28 a 32 px con el texto normal de 16 px, y lo más grande de todas las etiquetas.
+    expect(ESCALA_ETIQUETA.encabezado * 16).toBeGreaterThanOrEqual(28);
+    expect(ESCALA_ETIQUETA.encabezado * 16).toBeLessThanOrEqual(32);
+    expect(ESCALA_ETIQUETA.encabezado).toBe(Math.max(...Object.values(ESCALA_ETIQUETA)));
+    expect(etiqueta.style.fontSize).toBe(`calc(var(--texto-normal) * ${ESCALA_ETIQUETA.encabezado})`);
+    const barra = enc.querySelector('[role=progressbar]')!;
+    expect([barra.getAttribute('aria-valuenow'), barra.getAttribute('aria-valuemax')]).toEqual(['0', '2']); // vacío: Salí y Llegué
+    expect(barra.querySelectorAll('.segmento')).toHaveLength(2);
+    // La píldora "Datos de ejemplo" y "Salir" van dentro del encabezado.
+    expect(enc.querySelector('.aviso-ejemplo')!.textContent).toBe('Datos de ejemplo');
+    expect(enc.querySelector('.enc-salir')!.textContent!.trim()).toBe('Salir');
+  });
+
+  it('tarjeta montada sobre el encabezado con "Sale de" y "Llega a"; luego "Siguiente paso" con el botón principal', async () => {
+    const el = await montar();
+    const main = el.querySelector('main')!;
+    const tarjeta = main.firstElementChild!;
+    expect(tarjeta.classList).toContain('tarjeta-montada');
+    expect([...tarjeta.querySelectorAll('.etiqueta-seccion')].map((e) => e.textContent)).toEqual(['Sale de', 'Llega a']);
+    expect([...tarjeta.querySelectorAll('.lugar')].map((e) => e.textContent)).toEqual(['Patio Guadalupe, N.L.', 'Estación de diésel, Carr. Miguel Alemán km 12']);
+    expect(tarjeta.querySelectorAll('svg.icono')).toHaveLength(2);
+    const panel = main.querySelector('app-panel-avance')!;
+    expect(panel.querySelector('.titulo-seccion')!.textContent).toBe('Siguiente paso');
+    expect(panel.querySelector('.paso-siguiente')!.textContent!.trim()).toBe('Salí');
+    expect(panel.textContent).not.toContain('Estatus:');
+  });
+
+  it('la barra de avance se llena con lo que el operador ya reportó', async () => {
+    const el = await montar();
+    await TestBed.inject(ColaReportesService).registrar({
+      tipo: 'estatus',
+      viajeId: 'ej-via-770',
+      estatus: 'EnTransitoVacio',
+      ocurrioEn: '2026-11-23T16:00:00Z',
+      ubicacion: null,
+      nota: null,
+      resumen: 'Viaje 1',
+    });
+    await vi.waitFor(() => expect(el.querySelector('app-encabezado [role=progressbar]')!.getAttribute('aria-valuenow')).toBe('1'));
+    expect(el.querySelectorAll('app-encabezado .segmento.hecho')).toHaveLength(1);
   });
 
   it('en la lista de viajes de la salida cada viaje trae la misma etiqueta, mediana', async () => {
@@ -94,5 +133,33 @@ describe('Sin salida activa (la oficina la cerró o canceló)', () => {
     const el = f.nativeElement as HTMLElement;
     expect(el.querySelector('.sin-viaje h2')!.textContent).toBe('No tiene un viaje activo');
     expect(el.querySelector('.sin-viaje a')).toBeNull();
+  });
+});
+
+describe('Detalle de un viaje cargado', () => {
+  it('encabezado secundario con flecha de regreso; estatus actual en grande con barra; trayecto con cliente, citas y producto', async () => {
+    configurar(crearEntorno());
+    await entrarComo();
+    await TestBed.inject(AsignacionService).cargar();
+    const f = TestBed.createComponent(ViajePage);
+    f.componentRef.setInput('id', 'ej-via-771');
+    await f.whenStable();
+    const el = f.nativeElement as HTMLElement;
+    expect(el.querySelector('app-encabezado h1')!.textContent).toBe('Viaje 2 · Cargado');
+    expect(el.querySelector('app-encabezado a.enc-volver')!.getAttribute('href')).toBe('/viaje');
+    const estatus = el.querySelector('.tarjeta-estatus')!;
+    expect(estatus.querySelector('.etiqueta-seccion')!.textContent).toBe('Estatus actual');
+    expect(estatus.querySelector('app-etiqueta-estatus')!.classList).toContain('etiqueta-grande');
+    expect(estatus.querySelector('[role=progressbar]')!.getAttribute('aria-valuemax')).toBe('8');
+    const trayecto = el.querySelector('app-trayecto')!;
+    expect(trayecto.textContent).toContain('Apodaca, N.L.');
+    expect(trayecto.textContent).toContain('Saltillo, Coah.');
+    expect(trayecto.textContent).toContain('Aceros del Norte (ejemplo)');
+    expect(trayecto.textContent).toContain('Lámina rolada en caliente');
+    expect(trayecto.querySelector('.citas')!.textContent).toContain('Carga:');
+    // "Datos del viaje" no repite lo que ya está en el trayecto.
+    const datos = el.querySelector('app-datos-viaje')!;
+    expect(datos.textContent).not.toContain('Cliente');
+    expect(datos.textContent).toContain('Toneladas programadas');
   });
 });

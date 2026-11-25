@@ -47,15 +47,15 @@ import { cuandoNegocio, fechaHoraNegocio } from '../utils/zona-negocio.util';
   `,
   styles: `
     .foto-item h3 {
-      font-size: 1.15rem;
+      font-size: 1.05rem;
     }
     .miniatura {
       display: block;
       width: 100%;
       max-height: 220px;
       object-fit: cover;
-      border-radius: 8px;
-      margin: 8px 0;
+      border-radius: var(--radio-boton);
+      margin: var(--espacio-2) 0;
     }
     .foto-linea {
       margin: 0 0 4px;

@@ -1,65 +1,28 @@
-<header class="cabecera">
-  <span class="cabecera-titulo">
-    <span class="cabecera-nombre">{{ marca.nombre }}</span>
-    @if (esEjemplo) {
-      <span class="aviso-ejemplo" role="note">Datos de ejemplo</span>
-    }
-  </span>
-  @if (sesion()) {
-    <button type="button" class="btn btn-texto cabecera-salir" [disabled]="saliendo()" (click)="confirmandoSalida.set(true)">
-      {{ saliendo() ? 'Saliendo…' : 'Salir' }}
-    </button>
-  }
-</header>
-
-@if (sesion()) {
-  <div class="estado" aria-live="polite">
-    @if (!enLinea()) {
-      <p class="estado-linea estado-sin-conexion" role="status">
-        <strong>Sin conexión.</strong> Sus reportes se guardan en el teléfono y se envían solos al volver la señal.
-      </p>
-    }
-    @if (cola.pendientes() > 0) {
-      <a routerLink="/reportes" class="estado-linea estado-pendientes">
-        {{ textoPendientes(cola.pendientes()) }}{{ cola.enviando() ? ' · enviando…' : '' }}
-      </a>
-    }
-    @if (fotos.pendientes() > 0) {
-      <a routerLink="/evidencias" class="estado-linea estado-pendientes estado-fotos">
-        {{ fotos.avisoAcumuladas() ?? textoFotosPendientes(fotos.pendientes()) }}{{ fotos.enviando() ? ' · enviando…' : '' }}
-      </a>
-    }
-  </div>
-}
-
-@if (avisoReloj()) {
-  <p class="estado-linea estado-reloj" role="alert">{{ avisoReloj() }}</p>
-}
-
+<!-- El encabezado azul lo pone cada pantalla (app-encabezado): en Mi viaje es alto y lleva el estatus. -->
 <router-outlet />
 
 @if (sesion()) {
   <nav class="menu" aria-label="Menú principal">
     <a routerLink="/viaje" routerLinkActive="activo" class="menu-item">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 6h11v9H2zM13 9h4l3 3v3h-7zM6 18.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zm11 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z" /></svg>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 7h11v9H2zM13 10h4l3 3v3h-7zM6 19a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zm11 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z" /></svg>
       Mi viaje
     </a>
     <a routerLink="/reportes" routerLinkActive="activo" class="menu-item">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h14v18H5zM8 8h8M8 12h8M8 16h5" /></svg>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zM9 8h6M9 12h6M9 16h4" /></svg>
       Mis reportes
       @if (cola.pendientes() > 0) {
         <span class="menu-globo" aria-label="pendientes">{{ cola.pendientes() }}</span>
       }
     </a>
     <a routerLink="/evidencias" routerLinkActive="activo" class="menu-item">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h4l2-3h6l2 3h4v13H3zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" /></svg>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1zM12 17a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z" /></svg>
       Evidencias
       @if (fotos.pendientes() > 0) {
         <span class="menu-globo" aria-label="fotos pendientes">{{ fotos.pendientes() }}</span>
       }
     </a>
     <button type="button" class="menu-item menu-pronto" (click)="proximamente('Gastos')">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18v12H3zM3 10h18M7 15h4" /></svg>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1zM3 10h18M7 15h4" /></svg>
       Gastos
       <small>Próximamente</small>
     </button>
@@ -72,8 +35,8 @@
   </div>
 }
 
-@if (confirmandoSalida()) {
-  <div class="velo" (click)="confirmandoSalida.set(false)">
+@if (salida.confirmando()) {
+  <div class="velo" (click)="salida.cancelar()">
     <section class="hoja" role="dialog" aria-modal="true" aria-labelledby="titulo-salir" (click)="$event.stopPropagation()">
       <h2 id="titulo-salir">¿Salir de la aplicación?</h2>
       @if (cola.pendientes() > 0) {
@@ -90,8 +53,8 @@
       }
       <p>Para volver a entrar necesitará su celular y su PIN.</p>
       <div class="acciones">
-        <button type="button" class="btn btn-primario btn-bloque" (click)="salir()">Sí, salir</button>
-        <button type="button" class="btn btn-secundario btn-bloque" (click)="confirmandoSalida.set(false)">Cancelar</button>
+        <button type="button" class="btn btn-primario btn-bloque" (click)="salida.salir()">Sí, salir</button>
+        <button type="button" class="btn btn-secundario btn-bloque" (click)="salida.cancelar()">Cancelar</button>
       </div>
     </section>
   </div>

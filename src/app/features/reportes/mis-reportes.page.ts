@@ -3,22 +3,28 @@ import { RouterLink } from '@angular/router';
 import { ConexionService } from '../../core/conexion/conexion.service';
 import { MensajesService } from '../../core/mensajes/mensajes.service';
 import { ColaReportesService } from '../../core/reportes/cola-reportes.service';
+import { EncabezadoComponent } from '../../shared/ui/encabezado.component';
 import { ReporteItemComponent } from '../../shared/ui/reporte-item.component';
 import { textoPendientes } from '../../shared/utils/cola-reportes.util';
 import { horaNegocio } from '../../shared/utils/zona-negocio.util';
 
 @Component({
   selector: 'app-mis-reportes',
-  imports: [RouterLink, ReporteItemComponent],
+  imports: [RouterLink, EncabezadoComponent, ReporteItemComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './mis-reportes.page.html',
   styles: `
     .leyenda {
       display: grid;
-      gap: 8px;
-      padding: 0;
-      margin: 0 0 16px;
+      gap: var(--espacio-2);
+      padding: var(--espacio-4);
+      margin: 0 0 var(--espacio-4);
       list-style: none;
+      border: 1px solid var(--c-borde);
+      border-radius: var(--radio-tarjeta);
+      background: var(--c-superficie);
+      font-size: var(--texto-chico);
+      color: var(--c-texto-suave);
     }
   `,
 })

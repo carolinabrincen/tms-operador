@@ -1,0 +1,91 @@
+/*
+ * TEMA de la app del operador: colores, radios, espacios, letra y sombras. ÚNICO lugar para ajustarlos.
+ *
+ * Estilo (opción B de Carolina, nov. 2026): fondo gris muy claro, tarjetas blancas con borde fino y sombra suave,
+ * esquinas redondeadas con una sola escala y letra menos pesada. Un solo color fuerte (el azul de la marca); ámbar
+ * suave solo para incidencias y avisos; rojo solo para errores.
+ *
+ * Contraste (se usa a pleno sol): todo texto ≥ 4.5:1 sobre su fondo. Valores calculados (WCAG 2):
+ *   texto #111827 sobre blanco 17.7:1 · texto suave #4b5563 sobre blanco 7.6:1 y sobre el fondo de página 6.9:1
+ *   blanco sobre el azul #0b3d91 10.0:1 · blanco al 85 % sobre el azul 7.7:1
+ *   ámbar #7a4b00 sobre #fff4dc 6.8:1 · rojo #b42318 sobre blanco 6.6:1 · #8a1c12 sobre #fdecea 8.1:1
+ *   verde #0d5c27 sobre #e7f6ec 7.3:1 · azul #0b3d91 sobre #eaf1fd 8.8:1 · gris #6b7280 sobre blanco 4.8:1
+ *   contorno de campos #7c8797 sobre blanco 3.6:1 (no es texto: basta 3:1)
+ */
+
+:root {
+  /* ---- Colores */
+  --c-primario: #0b3d91; /* el azul de la marca (src/marca.json) */
+  --c-primario-oscuro: #082c69;
+  --c-primario-suave: #eaf1fd;
+  --c-sobre-primario: #ffffff;
+  --c-sobre-primario-suave: rgba(255, 255, 255, 0.85);
+  --c-sobre-primario-tenue: rgba(255, 255, 255, 0.3); /* solo decorativo (barra de avance pendiente) */
+  --c-sobre-primario-borde: rgba(255, 255, 255, 0.6);
+
+  --c-fondo-pagina: #f2f4f7;
+  --c-superficie: #ffffff;
+  --c-superficie-neutra: #f6f7f9;
+  --c-borde: #e1e5eb; /* 1 px, gris claro */
+  --c-borde-campo: #7c8797; /* contorno de campos de texto: visible (≥ 3:1) */
+  --c-texto: #111827;
+  --c-texto-suave: #4b5563;
+  --c-texto-tenue: #6b7280; /* solo para "Próximamente" y datos secundarios */
+
+  --c-aviso-fondo: #fff4dc;
+  --c-aviso-borde: #f3d48b;
+  --c-aviso-texto: #7a4b00;
+  --c-aviso-icono: #b26b00;
+
+  --c-error: #b42318;
+  --c-error-fondo: #fdecea;
+  --c-error-texto: #8a1c12;
+
+  --c-exito: #127a3a;
+  --c-exito-fondo: #e7f6ec;
+  --c-exito-texto: #0d5c27;
+
+  --c-info-fondo: var(--c-primario-suave);
+  --c-info-texto: var(--c-primario);
+
+  --c-enfoque: #ffb000;
+  --c-velo: rgba(17, 24, 39, 0.45);
+
+  /* ---- Radios: una sola escala */
+  --radio-tarjeta: 18px;
+  --radio-boton: 14px;
+  --radio-boton-grande: 16px;
+  --radio-encabezado: 24px;
+  --radio-hoja: 24px;
+  --radio-pildora: 999px;
+
+  /* ---- Espacios */
+  --espacio-1: 4px;
+  --espacio-2: 8px;
+  --espacio-3: 12px;
+  --espacio-4: 16px;
+  --espacio-5: 20px;
+  --espacio-6: 24px;
+  --espacio-8: 32px;
+
+  /* ---- Letra (cuerpo ≥ 14 px; títulos en 600 como máximo) */
+  --fuente: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --texto-normal: 16px; /* las etiquetas de estatus se calculan a partir de él */
+  --texto-chico: 14px;
+  --texto-titulo: 20px;
+  --peso-normal: 400;
+  --peso-medio: 500;
+  --peso-titulo: 600;
+
+  /* ---- Sombras y medidas */
+  --sombra-tarjeta: 0 1px 2px rgba(16, 24, 40, 0.04), 0 2px 8px rgba(16, 24, 40, 0.06);
+  --sombra-flotante: 0 8px 24px rgba(16, 24, 40, 0.14);
+  --ancho-max: 480px;
+  --alto-boton: 52px; /* ≥ 48 px */
+  --alto-boton-principal: 58px; /* ≥ 56 px */
+  --alto-menu: 64px;
+  --seguro-abajo: env(safe-area-inset-bottom, 0px);
+  --seguro-arriba: env(safe-area-inset-top, 0px);
+
+  color-scheme: light;
+}
