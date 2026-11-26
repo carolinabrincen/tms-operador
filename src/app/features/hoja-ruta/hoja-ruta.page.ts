@@ -1,4 +1,12 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  OnInit,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
+import { ColaReportesService } from '../../core/reportes/cola-reportes.service';
 import { RouterLink } from '@angular/router';
 import { TramoHoja } from '../../core/api/operador-api-m2.modelos';
 import { ConexionService } from '../../core/conexion/conexion.service';
@@ -10,17 +18,29 @@ import { AsignacionService } from '../../core/viaje/asignacion.service';
 import { EncabezadoComponent } from '../../shared/ui/encabezado.component';
 import { EstadoCasetas, estadoCasetas } from '../../shared/utils/casetas.util';
 import { textoMotivo } from '../../shared/utils/estatus-viaje.util';
-import { avisoOtraSalida, detalleLugar, fechaSinHora, ligaTelefono, textoKm, textoParada, textoTiempo, textoToneladas } from '../../shared/utils/hoja-ruta.util';
+import {
+  avisoOtraSalida,
+  detalleLugar,
+  fechaSinHora,
+  ligaTelefono,
+  textoKm,
+  textoParada,
+  textoTiempo,
+  textoToneladas,
+} from '../../shared/utils/hoja-ruta.util';
 import { TEXTO_ZONA_NEGOCIO, fechaHoraNegocio } from '../../shared/utils/zona-negocio.util';
+import { indiceTramoActual, tramosEnOrden } from '../../shared/utils/tramos-hoja.util';
+import { ListaTramosComponent } from '../../shared/ui/lista-tramos.component';
 
 /**
  * Hoja de ruta de la salida activa (contrato M2, sección 1; referencia aprobada, hoja-ruta.html): teléfonos con
- * "Llamar"; por tramo, origen y destino, la parada autorizada y SOLO la próxima caseta con "Ya la pasé" (se recuerda en
- * el teléfono por salida; "Ver todas" muestra la lista); "Abrir en mapa". Nunca importes. Se puede ver sin señal.
+ * "Llamar" arriba; SOLO el tramo actual (el viaje que "Mi viaje" presenta como el que toca, misma regla) con origen y
+ * destino, la parada autorizada, la próxima caseta con "Ya la pasé" (se recuerda por tramo) y "Abrir en mapa"; los
+ * demás tramos, en una hoja inferior a un toque. Nunca importes. Se puede ver sin señal.
  */
 @Component({
   selector: 'app-hoja-ruta',
-  imports: [RouterLink, EncabezadoComponent],
+  imports: [RouterLink, EncabezadoComponent, ListaTramosComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './hoja-ruta.page.html',
   styles: `
@@ -70,9 +90,23 @@ import { TEXTO_ZONA_NEGOCIO, fechaHoraNegocio } from '../../shared/utils/zona-ne
       justify-content: space-between;
       gap: 4px 10px;
     }
+    .tramo-encabezado {
+      margin: var(--espacio-5) 0 var(--espacio-2);
+      font-size: var(--texto-telefono);
+    }
     .tramo-titulo {
-      margin: 0;
       font-size: var(--texto-chico);
+      font-weight: 700;
+    }
+    .viendo-otro {
+      margin: var(--espacio-4) 0 0;
+    }
+    .viendo-otro-texto {
+      margin: 0 0 var(--espacio-2);
+      font-weight: 700;
+    }
+    .ver-otros {
+      margin-bottom: var(--espacio-2);
     }
     .distancia {
       font-size: var(--texto-chico);
@@ -217,7 +251,9 @@ export class HojaRutaPage implements OnInit {
   protected readonly estado = this.servicio.estado;
   protected readonly error = this.servicio.error;
   protected readonly desdeCopia = this.servicio.desdeCopia;
-  protected readonly avisoSalida = computed(() => avisoOtraSalida(this.hoja()?.folio, this.asignacion.asignacion()?.salida?.folio));
+  protected readonly avisoSalida = computed(() =>
+    avisoOtraSalida(this.hoja()?.folio, this.asignacion.asignacion()?.salida?.folio),
+  );
   /** "T-104 · al día 26 nov, 11:20 a. m." (cuándo se guardó en el teléfono lo que se ve). */
   protected readonly subtitulo = computed(() => {
     const h = this.hoja();
@@ -226,9 +262,51 @@ export class HojaRutaPage implements OnInit {
     return `${h.unidad.numeroEconomico}${al ? ' · al día ' + al : ''}`;
   });
   private readonly abiertos = signal<ReadonlySet<number>>(new Set());
+  private readonly cola = inject(ColaReportesService);
+
+  /** Tramos en orden y cuál es el actual (misma regla que Mi viaje). */
+  protected readonly tramos = computed(() => tramosEnOrden(this.hoja()));
+  protected readonly indiceActual = computed(() =>
+    indiceTramoActual(
+      this.hoja(),
+      this.asignacion.asignacion()?.salida ?? null,
+      this.cola.reportes(),
+    ),
+  );
+  /** El que el operador eligió en la lista; null = el actual. Al volver a entrar, otra vez el actual. */
+  private readonly seleccion = signal<number | null>(null);
+  protected readonly listaAbierta = signal(false);
+  /** El que se muestra: el elegido, el actual o, si no se sabe cuál es el actual, el primero. */
+  protected readonly indiceVisto = computed(() => {
+    const n = this.tramos().length;
+    if (!n) return null;
+    const i = this.seleccion() ?? this.indiceActual() ?? 0;
+    return Math.min(i, n - 1);
+  });
+  protected readonly tramoVisto = computed(() => {
+    const i = this.indiceVisto();
+    return i == null ? null : this.tramos()[i];
+  });
+  protected readonly viendoOtro = computed(
+    () => this.indiceActual() != null && this.indiceVisto() !== this.indiceActual(),
+  );
+  /** "Tramo actual · 2 de 4"; con un solo tramo, sin contador; viendo otro, "Tramo 3 de 4". */
+  protected readonly encabezadoTramo = computed(() => {
+    const total = this.tramos().length;
+    const i = this.indiceVisto() ?? 0;
+    const esActual = this.indiceActual() != null && i === this.indiceActual();
+    if (total <= 1) return esActual ? 'Tramo actual' : 'Tramo';
+    return esActual ? `Tramo actual · ${i + 1} de ${total}` : `Tramo ${i + 1} de ${total}`;
+  });
+  /** Sin viaje activo (la oficina cerró todo): los tramos ya están terminados. */
+  protected readonly todoTerminado = computed(() => {
+    const s = this.asignacion.asignacion()?.salida;
+    return !!s && s.viajes.every((v) => v.estatus === 'Cerrado' || v.estatus === 'Cancelado');
+  });
 
   protected readonly TEXTO_ZONA = TEXTO_ZONA_NEGOCIO;
-  protected readonly fechaHora = (iso: string | null) => fechaHoraNegocio(iso, undefined, this.reloj());
+  protected readonly fechaHora = (iso: string | null) =>
+    fechaHoraNegocio(iso, undefined, this.reloj());
   protected readonly fecha = fechaSinHora;
   protected readonly tel = ligaTelefono;
   protected readonly km = textoKm;
@@ -237,6 +315,17 @@ export class HojaRutaPage implements OnInit {
 
   ngOnInit(): void {
     void this.servicio.asegurar();
+    void this.asignacion.asegurar(); // para saber cuál es el tramo actual
+  }
+
+  /** Desde la lista: muestra ese tramo (si es el actual, quita el aviso). */
+  protected verTramo(i: number): void {
+    this.seleccion.set(i === this.indiceActual() ? null : i);
+    this.listaAbierta.set(false);
+  }
+
+  protected volverAlActual(): void {
+    this.seleccion.set(null);
   }
 
   protected casetasDe(folioSalida: string, t: TramoHoja): EstadoCasetas | null {
@@ -268,7 +357,9 @@ export class HojaRutaPage implements OnInit {
 
   /** Origen: la descripción y dirección; si no hay, la cita de carga. */
   protected lineaOrigen(t: TramoHoja): string {
-    return detalleLugar(t.origen) || (t.citaCarga ? `Cita de carga: ${this.fechaHora(t.citaCarga)}` : '');
+    return (
+      detalleLugar(t.origen) || (t.citaCarga ? `Cita de carga: ${this.fechaHora(t.citaCarga)}` : '')
+    );
   }
 
   /** Destino: la cita; si no hay, la descripción y dirección. */
@@ -281,12 +372,23 @@ export class HojaRutaPage implements OnInit {
     const d: { etiqueta: string; valor: string | null | undefined }[] = [
       { etiqueta: 'Folio', valor: t.folio },
       { etiqueta: 'Cliente', valor: t.cliente },
-      { etiqueta: 'Cita de carga', valor: t.citaCarga && detalleLugar(t.origen) ? this.fechaHora(t.citaCarga) : null },
+      {
+        etiqueta: 'Cita de carga',
+        valor: t.citaCarga && detalleLugar(t.origen) ? this.fechaHora(t.citaCarga) : null,
+      },
       { etiqueta: 'Dirección de destino', valor: t.citaDescarga ? detalleLugar(t.destino) : null },
       { etiqueta: 'Producto', valor: t.producto },
-      { etiqueta: 'Toneladas programadas', valor: t.toneladasProgramadas != null ? textoToneladas(t.toneladasProgramadas) : null },
+      {
+        etiqueta: 'Toneladas programadas',
+        valor: t.toneladasProgramadas != null ? textoToneladas(t.toneladasProgramadas) : null,
+      },
       { etiqueta: 'Referencia', valor: t.referencia },
-      { etiqueta: 'Motivo del vacío', valor: t.motivo ? `${textoMotivo(t.motivo)}${t.motivoNota ? ' · ' + t.motivoNota : ''}` : null },
+      {
+        etiqueta: 'Motivo del vacío',
+        valor: t.motivo
+          ? `${textoMotivo(t.motivo)}${t.motivoNota ? ' · ' + t.motivoNota : ''}`
+          : null,
+      },
       { etiqueta: 'Ruta', valor: t.ruta?.nombre },
       { etiqueta: 'Notas', valor: t.notas },
     ];
@@ -299,10 +401,14 @@ export class HojaRutaPage implements OnInit {
       return;
     }
     if (!this.conexion.enLinea()) {
-      this.mensajes.mostrar('Sin señal: se muestra la hoja guardada. Se actualizará sola al volver la señal.', 'aviso');
+      this.mensajes.mostrar(
+        'Sin señal: se muestra la hoja guardada. Se actualizará sola al volver la señal.',
+        'aviso',
+      );
       return;
     }
     await this.servicio.cargar();
-    if (this.estado() === 'listo' && !this.desdeCopia()) this.mensajes.mostrar('Hoja de ruta actualizada.', 'exito', 2500);
+    if (this.estado() === 'listo' && !this.desdeCopia())
+      this.mensajes.mostrar('Hoja de ruta actualizada.', 'exito', 2500);
   }
 }

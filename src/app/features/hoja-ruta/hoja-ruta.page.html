@@ -2,7 +2,14 @@
 
 <main class="pagina">
   @if (error()) {
-    <p class="alerta" [class.alerta-aviso]="desdeCopia()" [class.alerta-error]="!desdeCopia()" role="status">{{ error() }}</p>
+    <p
+      class="alerta"
+      [class.alerta-aviso]="desdeCopia()"
+      [class.alerta-error]="!desdeCopia()"
+      role="status"
+    >
+      {{ error() }}
+    </p>
   }
   @if (avisoSalida()) {
     <p class="alerta alerta-aviso" role="status">{{ avisoSalida() }}</p>
@@ -17,7 +24,11 @@
             <span class="numero">{{ h.telefonoEmpresa }}</span>
           </div>
           <a class="btn btn-primario llamar" [href]="t" aria-label="Llamar a la oficina">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z" /></svg>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"
+              />
+            </svg>
             Llamar
           </a>
         </div>
@@ -29,7 +40,11 @@
             <span class="numero">{{ h.telefonoTrafico }}</span>
           </div>
           <a class="btn btn-primario llamar" [href]="t" aria-label="Llamar a tráfico">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z" /></svg>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"
+              />
+            </svg>
             Llamar
           </a>
         </div>
@@ -39,11 +54,29 @@
       }
     </section>
 
-    @for (t of h.itinerario; track t.orden) {
+    <!-- Solo el tramo actual (el viaje que "Mi viaje" presenta como el que toca); los demás, en la lista. -->
+    @if (viendoOtro()) {
+      <div class="alerta alerta-aviso viendo-otro" role="status">
+        <p class="viendo-otro-texto">
+          Está viendo el tramo {{ indiceVisto()! + 1 }} de {{ tramos().length }}.
+        </p>
+        <button
+          type="button"
+          class="btn btn-secundario btn-bloque volver-actual"
+          (click)="volverAlActual()"
+        >
+          Volver al tramo actual
+        </button>
+      </div>
+    }
+    @if (tramoVisto(); as t) {
       @let c = casetasDe(h.folio, t);
-      <section class="tarjeta tramo" [attr.aria-label]="'Tramo ' + t.orden">
+      <h2 class="tramo-encabezado">{{ encabezadoTramo() }}</h2>
+      <section class="tarjeta tramo" [attr.aria-label]="'Tramo ' + (indiceVisto()! + 1)">
         <div class="tramo-cabeza">
-          <h2 class="tramo-titulo">Tramo {{ t.orden }} · {{ t.tipo === 'cargado' ? 'cargado' : 'vacío' }}</h2>
+          <span class="tramo-titulo">{{
+            t.tipo === 'cargado' ? 'Viaje cargado' : 'Movimiento vacío'
+          }}</span>
           @if (distancia(t)) {
             <span class="texto-suave distancia">{{ distancia(t) }}</span>
           }
@@ -78,12 +111,18 @@
 
         @if (t.ruta?.paradas?.length) {
           <div class="bloque paradas">
-            <span class="etiqueta-seccion">{{ t.ruta!.paradas.length > 1 ? 'Paradas autorizadas' : 'Parada autorizada' }}</span>
+            <span class="etiqueta-seccion">{{
+              t.ruta!.paradas.length > 1 ? 'Paradas autorizadas' : 'Parada autorizada'
+            }}</span>
             @for (p of t.ruta!.paradas; track p.orden) {
               <div class="parada">
-                <span class="parada-nombre">{{ parada(p.tipo) }}{{ p.referencia ? ' · ' + p.referencia : '' }}</span>
+                <span class="parada-nombre"
+                  >{{ parada(p.tipo) }}{{ p.referencia ? ' · ' + p.referencia : '' }}</span
+                >
                 @if (p.direccion || p.notas) {
-                  <span class="detalle">{{ p.direccion && p.notas ? p.direccion + ' · ' + p.notas : (p.direccion || p.notas) }}</span>
+                  <span class="detalle">{{
+                    p.direccion && p.notas ? p.direccion + ' · ' + p.notas : p.direccion || p.notas
+                  }}</span>
                 }
               </div>
             }
@@ -95,28 +134,48 @@
             @if (c.proxima; as prox) {
               <div class="caseta-fila">
                 <div class="caseta-datos">
-                  <span class="etiqueta-seccion">Próxima caseta · {{ c.n }} de {{ c.total }}</span>{{ ' ' }}
+                  <span class="etiqueta-seccion">Próxima caseta · {{ c.n }} de {{ c.total }}</span
+                  >{{ ' ' }}
                   <span class="caseta-nombre">{{ prox.nombre }}</span>
                 </div>
-                <button type="button" class="btn btn-secundario ya-la-pase" (click)="pasar(h.folio, t.orden, c.total)">Ya la pasé</button>
+                <button
+                  type="button"
+                  class="btn btn-secundario ya-la-pase"
+                  (click)="pasar(h.folio, t.orden, c.total)"
+                >
+                  Ya la pasé
+                </button>
               </div>
             } @else {
               <span class="caseta-nombre sin-pendientes">Sin casetas pendientes</span>
             }
-            <button type="button" class="btn btn-texto ver-todas" [attr.aria-expanded]="abierto(t.orden)" (click)="alternar(t.orden)">
+            <button
+              type="button"
+              class="btn btn-texto ver-todas"
+              [attr.aria-expanded]="abierto(t.orden)"
+              (click)="alternar(t.orden)"
+            >
               {{ abierto(t.orden) ? 'Ocultar la lista' : 'Ver todas (' + c.total + ')' }}
             </button>
             @if (abierto(t.orden)) {
               <ol class="lista-casetas">
                 @for (x of c.lista; track x.orden; let i = $index) {
                   <li [class.pasada]="i < c.pasadas" [class.proxima]="i === c.pasadas">
-                    <span class="lista-nombre">{{ x.nombre }}{{ x.autopista ? ' (' + x.autopista + ')' : '' }}</span>{{ ' ' }}
-                    <span class="lista-estado">{{ i < c.pasadas ? 'Pasada' : i === c.pasadas ? 'Próxima' : '' }}</span>
+                    <span class="lista-nombre"
+                      >{{ x.nombre }}{{ x.autopista ? ' (' + x.autopista + ')' : '' }}</span
+                    >{{ ' ' }}
+                    <span class="lista-estado">{{
+                      i < c.pasadas ? 'Pasada' : i === c.pasadas ? 'Próxima' : ''
+                    }}</span>
                   </li>
                 }
               </ol>
               @if (c.pasadas > 0) {
-                <button type="button" class="btn btn-secundario btn-bloque regresar-caseta" (click)="regresar(h.folio, t.orden)">
+                <button
+                  type="button"
+                  class="btn btn-secundario btn-bloque regresar-caseta"
+                  (click)="regresar(h.folio, t.orden)"
+                >
                   Marqué una por error: regresar una
                 </button>
               }
@@ -139,12 +198,41 @@
         }
 
         @if (t.ruta?.ligaMapa; as liga) {
-          <a class="btn btn-secundario btn-bloque abrir-mapa" [href]="liga" target="_blank" rel="noopener noreferrer">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21z" /><circle cx="12" cy="9.5" r="2.5" /></svg>
+          <a
+            class="btn btn-secundario btn-bloque abrir-mapa"
+            [href]="liga"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21z" />
+              <circle cx="12" cy="9.5" r="2.5" />
+            </svg>
             Abrir en mapa
           </a>
         }
       </section>
+    }
+
+    @if (tramos().length > 1) {
+      <button
+        type="button"
+        class="btn btn-secundario btn-bloque ver-otros"
+        (click)="listaAbierta.set(true)"
+      >
+        Ver los otros tramos ({{ tramos().length - 1 }})
+      </button>
+    }
+
+    @if (listaAbierta()) {
+      <app-lista-tramos
+        [tramos]="tramos()"
+        [indiceActual]="indiceActual()"
+        [indiceVisto]="indiceVisto()"
+        [todoTerminado]="todoTerminado()"
+        (elegir)="verTramo($event)"
+        (cerrar)="listaAbierta.set(false)"
+      />
     }
 
     <h2 class="titulo-seccion">Datos de la salida</h2>
@@ -173,7 +261,9 @@
         @if (h.kmPlaneados != null) {
           <div>
             <dt>Kilómetros planeados</dt>
-            <dd>{{ km(h.kmPlaneados) }}{{ h.tiempoEstimado ? ' · ' + tiempo(h.tiempoEstimado) : '' }}</dd>
+            <dd>
+              {{ km(h.kmPlaneados) }}{{ h.tiempoEstimado ? ' · ' + tiempo(h.tiempoEstimado) : '' }}
+            </dd>
           </div>
         }
         @if (h.operador.nombre) {
@@ -182,14 +272,19 @@
             <dd>
               {{ h.operador.nombre }}
               @if (h.operador.licenciaNumero) {
-                · Licencia {{ h.operador.licenciaTipo ? 'tipo ' + h.operador.licenciaTipo + ' ' : '' }}{{ h.operador.licenciaNumero }}
+                · Licencia
+                {{ h.operador.licenciaTipo ? 'tipo ' + h.operador.licenciaTipo + ' ' : ''
+                }}{{ h.operador.licenciaNumero }}
               }
             </dd>
           </div>
         }
         <div>
           <dt>Unidad</dt>
-          <dd>{{ h.unidad.numeroEconomico }} · {{ h.unidad.placas ? 'Placas ' + h.unidad.placas : 'Sin placas' }}</dd>
+          <dd>
+            {{ h.unidad.numeroEconomico }} ·
+            {{ h.unidad.placas ? 'Placas ' + h.unidad.placas : 'Sin placas' }}
+          </dd>
         </div>
         @if (h.unidad.configuracion) {
           <div>
@@ -218,7 +313,9 @@
   } @else if (estado() === 'listo') {
     <section class="tarjeta tarjeta-destacada sin-hoja" role="status">
       <h2>No tiene una salida activa</h2>
-      <p>Por eso no hay hoja de ruta. Cuando la oficina le asigne una salida, su hoja aparecerá aquí.</p>
+      <p>
+        Por eso no hay hoja de ruta. Cuando la oficina le asigne una salida, su hoja aparecerá aquí.
+      </p>
       <a routerLink="/viaje" class="btn btn-secundario btn-bloque">Ir a Mi viaje</a>
     </section>
   } @else if (estado() !== 'error') {
@@ -226,7 +323,12 @@
   }
 
   <div class="acciones">
-    <button type="button" class="btn btn-secundario btn-bloque" [class.btn-ocupado]="estado() === 'cargando'" (click)="actualizar()">
+    <button
+      type="button"
+      class="btn btn-secundario btn-bloque"
+      [class.btn-ocupado]="estado() === 'cargando'"
+      (click)="actualizar()"
+    >
       {{ estado() === 'cargando' ? 'Actualizando…' : 'Actualizar' }}
     </button>
   </div>

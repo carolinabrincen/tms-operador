@@ -68,7 +68,12 @@ service worker, la ubicación y `crypto.randomUUID` no funcionan en `http://` sa
 ## Hoja de ruta (contrato M2, sección 1)
 
 - Mi viaje → renglón **Hoja de ruta · próxima caseta: …** (`/hoja-ruta`): teléfonos de oficina y de tráfico con
-  **Llamar**; por tramo, origen y destino con una línea de detalle, **MATERIAL PELIGROSO** si aplica, la parada
+  **Llamar** (arriba, siempre visibles) y **solo el tramo actual**: el del viaje que Mi viaje presenta como el que toca
+  (misma regla, `viajeActivo`; `shared/utils/tramos-hoja.util.ts`), con el encabezado "Tramo actual · 2 de 4". **Ver los
+  otros tramos (3)** abre una hoja inferior con la lista compacta (número, origen → destino y estado en palabras con
+  icono: Terminado, Actual, Siguiente, Pendiente); al tocar uno se muestra con el aviso "Está viendo el tramo 3 de 4" y
+  **Volver al tramo actual**. Con un solo tramo no hay botón ni contador. Al volver a entrar se muestra el actual. En el
+  tramo, origen y destino con una línea de detalle, **MATERIAL PELIGROSO** si aplica, la parada
   autorizada y **solo la próxima caseta** ("Próxima caseta · 1 de 3", su nombre en grande y **Ya la pasé**). "Ya la
   pasé" se recuerda en el teléfono por salida (`core/hoja-ruta/casetas.service.ts`, solo conteos); **Ver todas** abre la
   lista completa (y permite regresar una marcada por error); al terminar, "Sin casetas pendientes". Lo demás del tramo
