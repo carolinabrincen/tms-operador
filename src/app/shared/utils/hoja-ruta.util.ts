@@ -1,5 +1,6 @@
 /** Hoja de ruta en pantalla (contrato M2, sección 1). PURO. */
 import { LugarHoja, TiempoHoja, TipoParada } from '../../core/api/operador-api-m2.modelos';
+import { MESES_CORTOS } from './zona-negocio.util';
 
 export const ETIQUETA_PARADA: Readonly<Record<TipoParada, string>> = {
   Descanso: 'Descanso',
@@ -20,10 +21,12 @@ export function ligaTelefono(t: string | null | undefined): string | null {
   return limpio.replace(/\D/g, '').length >= 7 ? `tel:${limpio}` : null;
 }
 
-/** "2026-11-27" → "27/11/2026" (es solo fecha: no se convierte de zona). Lo que no tenga esa forma se muestra tal cual. */
+/**
+ * "2026-11-27" → "27 nov 2026" (es solo fecha: no se convierte de zona). Lo que no tenga esa forma se muestra tal cual.
+ */
 export function fechaSinHora(f: string | null | undefined): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(f ?? '');
-  return m ? `${m[3]}/${m[2]}/${m[1]}` : (f ?? '');
+  return m ? `${Number(m[3])} ${MESES_CORTOS[Number(m[2]) - 1] ?? m[2]} ${m[1]}` : (f ?? '');
 }
 
 /** "9 h 30 min", "45 min", "2 h". */

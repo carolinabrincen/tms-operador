@@ -1,24 +1,78 @@
 .panel {
-  display: grid;
-  gap: var(--espacio-3);
-  margin: 0 0 var(--espacio-2);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
-.panel .titulo-seccion {
-  margin: var(--espacio-2) 0 0;
+.panel .alerta {
+  margin: 0;
 }
-.paso-nota {
-  margin: calc(-1 * var(--espacio-1)) 0 0;
+
+/* Botón principal: línea de ayuda (14 px) arriba y el paso en palabras del operador (24 px). */
+.paso-siguiente .textos {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+}
+.paso-siguiente .ayuda {
   font-size: var(--texto-chico);
+  font-weight: 600;
 }
-/* "Otro paso" e "Incidencia", a la mitad cada uno. */
-.secundarias {
+.paso-siguiente .accion {
+  font-size: var(--texto-titulo);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+/* "Guardado: «Ya cargué», 11:32 a. m." con "Deshacer" (ocupa el lugar del botón principal mientras dura el lapso). */
+.guardado {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: var(--alto-boton-principal);
+  padding: 6px 8px 6px 16px;
+  border-radius: var(--radio-boton-medio);
+  background: var(--c-texto);
+  color: #fff;
+}
+.guardado-texto {
+  font-size: var(--texto-boton);
+  font-weight: 600;
+}
+.deshacer {
+  flex: none;
+  min-height: var(--alto-boton);
+  padding: 0 14px;
+  border: 1.5px solid #fff;
+  border-radius: 10px;
+  background: transparent;
+  color: #fff;
+  font-size: var(--texto-boton);
+  font-weight: 700;
+}
+
+/* Incidencia, Foto y Otro paso: tres botones de 64 px, separados. */
+.fila {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--espacio-3);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
 }
-.secundarias.una-sola {
-  grid-template-columns: 1fr;
+.fila .btn {
+  flex-direction: column;
+  gap: 4px;
+  min-height: var(--alto-boton-fila);
+  padding: 6px 4px;
+  font-size: var(--texto-boton);
 }
+.fila .btn svg {
+  width: 22px;
+  height: 22px;
+}
+.fila .icono-aviso {
+  stroke: var(--c-aviso-icono);
+}
+
 .hoja-viaje {
   margin-top: var(--espacio-3);
 }

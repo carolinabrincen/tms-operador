@@ -37,7 +37,7 @@ describe('HojaRutaService: hoja de ruta guardada en el teléfono para verla sin 
     expect(s.desdeCopia()).toBe(true);
     expect(s.hojaRuta()!.folio).toBe('SAL-2026-00418');
     expect(s.error()).toBe(
-      'Sin conexión con la oficina. Se muestra la hoja guardada el 23/11/2026 10:00; puede no estar al día (la oficina pudo cambiar paradas o casetas).',
+      'Sin conexión con la oficina: se muestra la hoja guardada (23 nov, 10:00\u00a0a.\u00a0m.); puede no estar al día (la oficina pudo cambiar paradas o casetas).',
     );
   });
 

@@ -1,4 +1,4 @@
-<app-encabezado [titulo]="marca.nombre" />
+<app-encabezado [titulo]="marca.nombre" subtitulo="Su viaje y sus avances, desde el celular" />
 
 <main class="pagina">
   <section class="tarjeta tarjeta-acceso">
@@ -58,8 +58,9 @@
       <p class="alerta alerta-error" role="alert">{{ errorGeneral() }}</p>
     }
 
-    <button type="submit" class="btn btn-primario btn-bloque" [class.btn-ocupado]="entrando()" [attr.aria-busy]="entrando()">
+    <button type="submit" class="btn btn-primario btn-bloque btn-principal entrar" [class.btn-ocupado]="entrando()" [attr.aria-busy]="entrando()">
       {{ entrando() ? 'Entrando…' : 'Entrar' }}
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14" /><path d="M13 6l6 6-6 6" /></svg>
     </button>
   </form>
   </section>

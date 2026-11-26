@@ -102,7 +102,7 @@ export class HojaRutaService {
       this.estadoSig.set(hayCopia ? 'listo' : 'error');
       this.errorSig.set(
         hayCopia
-          ? `Sin conexión con la oficina. Se muestra la hoja guardada el ${fechaHoraNegocio(this.guardadaEnSig())}; puede no estar al día (la oficina pudo cambiar paradas o casetas).`
+          ? `Sin conexión con la oficina: se muestra la hoja guardada (${fechaHoraNegocio(this.guardadaEnSig(), undefined, this.reloj())}); puede no estar al día (la oficina pudo cambiar paradas o casetas).`
           : 'No se pudo cargar la hoja de ruta. Revise su señal e intente de nuevo.',
       );
     }

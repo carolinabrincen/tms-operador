@@ -90,12 +90,12 @@ export function tarjetasIncidencias(salida: Salida | null, reportes: readonly Re
   return tarjetas.sort((a, b) => (msDeIso(a.ocurrioEn) ?? 0) - (msDeIso(b.ocurrioEn) ?? 0) || a.clave.localeCompare(b.clave));
 }
 
-/** "desde las 14:07" (hoy, en el negocio) o "desde el 24/11/2026 a las 14:07". */
+/** "desde 2:07 p. m." (hoy, en el negocio) o "desde el 24 nov, 2:07 p. m.". */
 export function textoDesde(ocurrioEn: IsoUtc, ahora: Date = new Date()): string {
   const hora = horaNegocio(ocurrioEn);
   if (!hora) return '';
-  if (diaNegocio(ocurrioEn) === diaNegocio(ahora.toISOString())) return `desde las ${hora}`;
-  return `desde el ${fechaNegocio(ocurrioEn)} a las ${hora}`;
+  if (diaNegocio(ocurrioEn) === diaNegocio(ahora.toISOString())) return `desde ${hora}`;
+  return `desde el ${fechaNegocio(ocurrioEn, undefined, ahora)}, ${hora}`;
 }
 
 /** Un texto de usted para cada código de error de la sección 7. Otro código: el mensaje del servidor (ya es de usted). */

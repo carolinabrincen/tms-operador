@@ -1,4 +1,4 @@
-import { DestroyRef, Injectable, computed, inject, signal } from '@angular/core';
+import { DestroyRef, Injectable, InjectionToken, computed, inject, signal } from '@angular/core';
 import {
   conEnvioExitoso,
   conEstadoRemoto,
@@ -14,7 +14,7 @@ import { generarIdReporte } from '../../shared/utils/id-reporte.util';
 import { mensajeErrorTermino } from '../../shared/utils/incidencias-abiertas.util';
 import { ahoraIsoUtc } from '../../shared/utils/zona-negocio.util';
 import { CODIGO_HORA_INVALIDA, OPERADOR_API, comoErrorApi } from '../api/operador-api';
-import { ReporteEstatus, ReporteIncidencia, TerminoIncidencia } from '../api/operador-api.modelos';
+import { PuntoGps, ReporteEstatus, ReporteIncidencia, TerminoIncidencia } from '../api/operador-api.modelos';
 import { ConexionService } from '../conexion/conexion.service';
 import { NAVEGADOR, RELOJ } from '../plataforma';
 import { RelojTelefonoService } from '../reloj/reloj-telefono.service';
@@ -25,6 +25,9 @@ import { ReporteLocal } from './reporte-local';
 
 /** Cuántas veces se le cambia el id a un reporte por 409 de id duplicado antes de darlo por no aceptado. */
 const MAX_CAMBIOS_DE_ID = 3;
+
+/** Lapso para "Deshacer" tras tocar el botón principal: el reporte ya está guardado, pero no se envía antes. */
+export const LAPSO_DESHACER_MS = new InjectionToken<number>('LAPSO_DESHACER_MS', { providedIn: 'root', factory: () => 8000 });
 
 /** Un reporte por registrar: todo menos el id (lo pone la cola) y el texto para mostrarlo en la lista. */
 export type NuevoReporte = (Omit<ReporteEstatus, 'id'> | Omit<ReporteIncidencia, 'id'> | Omit<TerminoIncidencia, 'id'>) & { resumen: string };
@@ -62,6 +65,12 @@ export class ColaReportesService {
   private temporizador: ReturnType<typeof setTimeout> | null = null;
   private pidioPersistencia = false;
   private readonly oyentesCambioId = new Set<(viejo: string, nuevo: string) => Promise<void> | void>();
+  private readonly lapsoDeshacerMs = inject(LAPSO_DESHACER_MS);
+  /** Reportes guardados que esperan el lapso de "Deshacer" (solo en memoria: si se cierra la app, se envían al volver). */
+  private readonly retenidosTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private readonly retenidosSig = signal<readonly string[]>([]);
+  /** Ids que el operador deshizo: nunca se envían, aunque alguna lectura del almacén los traiga de vuelta. */
+  private readonly deshechos = new Set<string>();
 
   /** Reportes del operador con sesión, lo más reciente primero. */
   readonly reportes = computed(() => {
@@ -78,6 +87,8 @@ export class ColaReportesService {
    * pantallas lo usan para releer el viaje.
    */
   readonly enviados = this.enviadosSig.asReadonly();
+  /** Ids de los reportes que aún se pueden deshacer (esperan su lapso antes de enviarse). */
+  readonly retenidos = this.retenidosSig.asReadonly();
 
   constructor() {
     this.cargaInicial = this.recargar();
@@ -87,6 +98,8 @@ export class ColaReportesService {
     inject(DestroyRef).onDestroy(() => {
       baja();
       this.cancelarReintento();
+      for (const t of this.retenidosTimers.values()) clearTimeout(t);
+      this.retenidosTimers.clear();
     });
   }
 
@@ -110,19 +123,52 @@ export class ColaReportesService {
     while (this.corriendo) await this.corriendo;
   }
 
-  /** Guarda el reporte en el teléfono y luego intenta enviarlo (sin esperar el envío). */
-  async registrar(nuevo: NuevoReporte): Promise<ReporteLocal> {
+  /**
+   * Guarda el reporte en el teléfono y luego intenta enviarlo (sin esperar el envío). Con `retener`, espera el lapso de
+   * "Deshacer" antes de enviarse (ver `deshacer`); pasado el lapso sigue el flujo normal de la cola.
+   */
+  async registrar(nuevo: NuevoReporte, opciones: { retener?: boolean } = {}): Promise<ReporteLocal> {
     const operadorId = this.sesion.operadorId();
     if (!operadorId) throw new Error('No hay sesión: no se puede registrar el reporte.');
     await this.cargaInicial;
     const { resumen, ...datos } = nuevo;
     const reporte = { ...datos, id: generarIdReporte(), nota: datos.nota?.trim() ? datos.nota.trim() : null } as ReporteEstatus | ReporteIncidencia | TerminoIncidencia;
     const local = crearReporteLocal(reporte, operadorId, resumen, ahoraIsoUtc(this.reloj()));
-    await this.almacen.guardar(local); // PRIMERO se guarda…
+    if (opciones.retener) this.retener(local.id); // antes de guardarlo: ninguna corrida debe alcanzarlo
+    try {
+      await this.almacen.guardar(local); // PRIMERO se guarda…
+    } catch (e) {
+      this.soltar(local.id);
+      throw e;
+    }
     this.poner(local);
     void this.pedirPersistencia();
     void this.procesar(); // …después se envía.
     return local;
+  }
+
+  /**
+   * "Deshacer": cancela un reporte que aún espera su lapso, sin enviar nada. false si ya no se puede (pasó el lapso o
+   * no estaba retenido).
+   */
+  async deshacer(id: string): Promise<boolean> {
+    if (!this.retenidosTimers.has(id)) return false;
+    this.soltar(id);
+    this.deshechos.add(id);
+    this.todosSig.update((lista) => lista.filter((r) => r.id !== id));
+    try {
+      await this.almacen.eliminar(id);
+    } catch {
+      // Si no se pudo borrar del almacén, igual nunca se envía (está en `deshechos`).
+    }
+    return true;
+  }
+
+  /** La ubicación llegó durante el lapso: se agrega al reporte retenido (si ya salió, no se toca). */
+  async completarUbicacion(id: string, ubicacion: PuntoGps): Promise<void> {
+    const r = this.todosSig().find((x) => x.id === id);
+    if (!r || !this.retenidosTimers.has(id) || r.estado !== 'pendiente' || r.reporte.tipo === 'termino') return;
+    await this.guardarYPoner({ ...r, reporte: { ...r.reporte, ubicacion } });
   }
 
   /**
@@ -186,7 +232,7 @@ export class ColaReportesService {
     if (!operadorId) return;
     // Se relee del almacén: otra pestaña pudo haber agregado o enviado reportes.
     await this.recargar();
-    const cola = porEnviar(this.todosSig(), operadorId);
+    const cola = porEnviar(this.todosSig(), operadorId).filter((r) => !this.retenidosTimers.has(r.id) && !this.deshechos.has(r.id));
     if (!cola.length) {
       this.cancelarReintento();
       return;
@@ -242,6 +288,24 @@ export class ColaReportesService {
     }
   }
 
+  private retener(id: string): void {
+    this.retenidosTimers.set(
+      id,
+      setTimeout(() => {
+        this.soltar(id);
+        void this.procesar(); // pasado el lapso, el flujo normal
+      }, this.lapsoDeshacerMs),
+    );
+    this.retenidosSig.set([...this.retenidosTimers.keys()]);
+  }
+
+  private soltar(id: string): void {
+    const t = this.retenidosTimers.get(id);
+    if (t) clearTimeout(t);
+    this.retenidosTimers.delete(id);
+    this.retenidosSig.set([...this.retenidosTimers.keys()]);
+  }
+
   private agendarReintento(intentos: number): void {
     this.cancelarReintento();
     const espera = retrasoReintentoMs(intentos);
@@ -264,7 +328,7 @@ export class ColaReportesService {
       const guardados = await this.almacen.todos();
       const ids = new Set(guardados.map((r) => r.id));
       // El almacén manda; lo que esté en memoria y aún no se vea en él (recién creado) se conserva.
-      this.todosSig.update((enMemoria) => [...guardados, ...enMemoria.filter((r) => !ids.has(r.id))]);
+      this.todosSig.update((enMemoria) => [...guardados, ...enMemoria.filter((r) => !ids.has(r.id))].filter((r) => !this.deshechos.has(r.id)));
     } catch {
       // Si no se puede leer, se conserva lo que hay en memoria.
     }

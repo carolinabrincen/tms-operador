@@ -119,7 +119,7 @@ const FUTURO_MAXIMO_MS = 10 * 60 * 1000;
       margin-bottom: 12px;
     }
     .etiqueta-campo {
-      font-weight: var(--peso-medio);
+      font-weight: 600;
       margin: 12px 0 6px;
     }
   `,

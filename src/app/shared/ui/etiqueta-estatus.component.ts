@@ -39,7 +39,7 @@ export type TamanoEtiqueta = keyof typeof ESCALA_ETIQUETA;
       align-items: flex-start;
       gap: 4px;
       border-radius: var(--radio-boton);
-      font-weight: var(--peso-titulo);
+      font-weight: 700;
       line-height: 1.15;
     }
     :host(.etiqueta-encabezado) {
@@ -66,7 +66,7 @@ export type TamanoEtiqueta = keyof typeof ESCALA_ETIQUETA;
     }
     .etiqueta-marca {
       font-size: var(--texto-chico);
-      font-weight: var(--peso-medio);
+      font-weight: 600;
     }
     :host(.etiqueta-encabezado) .etiqueta-marca {
       padding: 2px 10px;

@@ -78,10 +78,10 @@ describe('incidencias-abiertas.util: tarjetas de "Mi viaje" y "Ya continué"', (
     expect(t.map((x) => x.clave)).toEqual(['inc-oficina', 'inc-2']);
   });
 
-  it('"desde las 14:07" en la zona del negocio; otro día, con fecha', () => {
+  it('"desde 2:07\u00a0p.\u00a0m." en la zona del negocio (12 horas); otro día, con fecha', () => {
     const ahora = new Date('2026-11-23T21:00:00Z');
-    expect(textoDesde('2026-11-23T20:07:00Z', ahora)).toBe('desde las 14:07');
-    expect(textoDesde('2026-11-22T20:07:00Z', ahora)).toBe('desde el 22/11/2026 a las 14:07');
+    expect(textoDesde('2026-11-23T20:07:00Z', ahora)).toBe('desde 2:07\u00a0p.\u00a0m.');
+    expect(textoDesde('2026-11-22T20:07:00Z', ahora)).toBe('desde el 22 nov, 2:07\u00a0p.\u00a0m.');
   });
 
   it('un texto de usted para CADA código de error de la sección 7', () => {

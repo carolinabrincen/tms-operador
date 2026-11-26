@@ -1,62 +1,70 @@
 /*
- * TEMA de la app del operador: colores, radios, espacios, letra y sombras. ÚNICO lugar para ajustarlos.
+ * TEMA de la app del operador: colores, radios, medidas y letra. ÚNICO lugar para ajustarlos.
  *
- * Estilo (opción B de Carolina, nov. 2026): fondo gris muy claro, tarjetas blancas con borde fino y sombra suave,
- * esquinas redondeadas con una sola escala y letra menos pesada. Un solo color fuerte (el azul de la marca); ámbar
- * suave solo para incidencias y avisos; rojo solo para errores.
+ * Valores copiados de la referencia aprobada por Carolina el 26/11/2026
+ * (docs/diseno-app-operador/mi-viaje.html y hoja-ruta.html): práctico, legible y usable en ruta.
  *
- * Contraste (se usa a pleno sol): todo texto ≥ 4.5:1 sobre su fondo. Valores calculados (WCAG 2):
- *   texto #111827 sobre blanco 17.7:1 · texto suave #4b5563 sobre blanco 7.6:1 y sobre el fondo de página 6.9:1
- *   blanco sobre el azul #0b3d91 10.0:1 · blanco al 85 % sobre el azul 7.7:1
- *   ámbar #7a4b00 sobre #fff4dc 6.8:1 · rojo #b42318 sobre blanco 6.6:1 · #8a1c12 sobre #fdecea 8.1:1
- *   verde #0d5c27 sobre #e7f6ec 7.3:1 · azul #0b3d91 sobre #eaf1fd 8.8:1 · gris #6b7280 sobre blanco 4.8:1
- *   contorno de campos #7c8797 sobre blanco 3.6:1 (no es texto: basta 3:1)
+ * Criterios de aceptación (operador promedio de 42 años, en ruta; heurísticas de Nielsen):
+ *  - Ningún texto menor de 13 px (solo etiquetas del menú y de la línea de avance); datos 16-17 px; secundarios 14 px.
+ *    Todo en rem (16 px = 1rem) para que la letra grande del sistema funcione.
+ *  - Texto secundario nunca más claro que #4B5563. Contraste mínimo 4.5:1 (ver core/config/tema-colores.ts y su prueba).
+ *  - Botón principal de 72 px de alto; los demás de 50 a 64 px, separados entre sí.
  */
 
 :root {
-  /* ---- Colores */
-  --c-primario: #0b3d91; /* el azul de la marca (src/marca.json) */
-  --c-primario-oscuro: #082c69;
-  --c-primario-suave: #eaf1fd;
-  --c-sobre-primario: #ffffff;
-  --c-sobre-primario-suave: rgba(255, 255, 255, 0.85);
-  --c-sobre-primario-tenue: rgba(255, 255, 255, 0.3); /* solo decorativo (barra de avance pendiente) */
-  --c-sobre-primario-borde: rgba(255, 255, 255, 0.6);
-
-  --c-fondo-pagina: #f2f4f7;
+  /* ---- Colores (tokens de la referencia) */
+  --c-fondo-pagina: #f3f4f6;
   --c-superficie: #ffffff;
-  --c-superficie-neutra: #f6f7f9;
-  --c-borde: #e1e5eb; /* 1 px, gris claro */
-  --c-borde-campo: #7c8797; /* contorno de campos de texto: visible (≥ 3:1) */
+  --c-borde: #d9dde4; /* borde fino */
+  --c-linea-trayecto: #cbd0d8; /* la línea entre origen y destino (decorativa) */
   --c-texto: #111827;
-  --c-texto-suave: #4b5563;
-  --c-texto-tenue: #6b7280; /* solo para "Próximamente" y datos secundarios */
+  --c-texto-suave: #4b5563; /* nunca más claro */
 
-  --c-aviso-fondo: #fff4dc;
-  --c-aviso-borde: #f3d48b;
-  --c-aviso-texto: #7a4b00;
-  --c-aviso-icono: #b26b00;
+  --c-primario: #1d4ed8; /* acción principal, texto blanco */
+  --c-primario-oscuro: #163ba6;
+  --c-sobre-primario: #ffffff;
 
+  /* Bloque del paso actual */
+  --c-paso: #0f172a;
+  --c-paso-texto: #ffffff;
+  --c-paso-suave: #cbd5e1;
+  --c-paso-pendiente: #475569; /* tramo de la línea aún no recorrido (decorativo) */
+  --c-paso-punto: #94a3b8; /* contorno de hito pendiente (decorativo) */
+  --c-marca: #ffd666; /* "Usted está aquí" */
+  --c-marca-texto: #0f172a;
+
+  /* Incidencia */
+  --c-aviso-fondo: #fff4d6;
+  --c-aviso-borde: #d9a93a;
+  --c-aviso-texto: #4a2d00;
+  --c-aviso-texto-2: #6b4100;
+  --c-aviso-icono: #7a4a00;
+
+  /* Señal */
+  --c-senal: #12653f;
+  --c-senal-punto: #16794c;
+  --c-sin-senal: #7a4a00;
+  --c-sin-senal-punto: #b4730a;
+
+  /* Fuera de la referencia (errores y éxito), con el mismo criterio de contraste */
   --c-error: #b42318;
   --c-error-fondo: #fdecea;
   --c-error-texto: #8a1c12;
-
-  --c-exito: #127a3a;
   --c-exito-fondo: #e7f6ec;
   --c-exito-texto: #0d5c27;
+  --c-info-fondo: #e8eefc;
+  --c-info-texto: #163ba6;
 
-  --c-info-fondo: var(--c-primario-suave);
-  --c-info-texto: var(--c-primario);
+  --c-enfoque: #111827;
+  --c-velo: rgba(17, 24, 39, 0.5);
 
-  --c-enfoque: #ffb000;
-  --c-velo: rgba(17, 24, 39, 0.45);
-
-  /* ---- Radios: una sola escala */
-  --radio-tarjeta: 18px;
-  --radio-boton: 14px;
-  --radio-boton-grande: 16px;
-  --radio-encabezado: 24px;
-  --radio-hoja: 24px;
+  /* ---- Radios: tarjetas 16-18, botones 12-18, píldoras 999 */
+  --radio-tarjeta: 16px;
+  --radio-bloque: 18px;
+  --radio-boton: 12px;
+  --radio-boton-medio: 14px;
+  --radio-boton-principal: 18px;
+  --radio-hoja: 20px;
   --radio-pildora: 999px;
 
   /* ---- Espacios */
@@ -66,24 +74,29 @@
   --espacio-4: 16px;
   --espacio-5: 20px;
   --espacio-6: 24px;
-  --espacio-8: 32px;
+  --margen-lado: 18px;
 
-  /* ---- Letra (cuerpo ≥ 14 px; títulos en 600 como máximo) */
-  --fuente: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --texto-normal: 16px; /* las etiquetas de estatus se calculan a partir de él */
-  --texto-chico: 14px;
-  --texto-titulo: 20px;
-  --peso-normal: 400;
-  --peso-medio: 500;
-  --peso-titulo: 600;
+  /* ---- Letra: Manrope 400/500/600/700 con respaldo system-ui. Tamaños en rem. */
+  --fuente: 'Manrope', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --texto-minimo: 0.8125rem; /* 13 px: SOLO etiquetas del menú y de la línea de avance */
+  --texto-chico: 0.875rem; /* 14 px: secundarios */
+  --texto-boton: 0.9375rem; /* 15 px */
+  --texto-normal: 1rem; /* 16 px: datos */
+  --texto-dato: 1.0625rem; /* 17 px: datos destacados (lugares) */
+  --texto-telefono: 1.125rem; /* 18 px */
+  --texto-caseta: 1.25rem; /* 20 px */
+  --texto-titulo: 1.5rem; /* 24 px: título de pantalla y texto del botón principal */
+  --texto-estatus: 2.5rem; /* 40 px: el estatus actual */
 
-  /* ---- Sombras y medidas */
-  --sombra-tarjeta: 0 1px 2px rgba(16, 24, 40, 0.04), 0 2px 8px rgba(16, 24, 40, 0.06);
-  --sombra-flotante: 0 8px 24px rgba(16, 24, 40, 0.14);
+  /* ---- Medidas */
   --ancho-max: 480px;
-  --alto-boton: 52px; /* ≥ 48 px */
-  --alto-boton-principal: 58px; /* ≥ 56 px */
-  --alto-menu: 64px;
+  --alto-boton-principal: 72px;
+  --alto-boton: 50px; /* mínimo para los demás botones */
+  --alto-boton-medio: 54px;
+  --alto-boton-fila: 64px;
+  --alto-menu: 54px;
+  --alto-franja-ejemplo: 32px;
+  --sombra-flotante: 0 8px 24px rgba(16, 24, 40, 0.16);
   --seguro-abajo: env(safe-area-inset-bottom, 0px);
   --seguro-arriba: env(safe-area-inset-top, 0px);
 

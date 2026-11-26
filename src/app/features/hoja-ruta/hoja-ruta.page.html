@@ -1,7 +1,6 @@
-<app-encabezado titulo="Hoja de ruta" volver="/viaje" />
+<app-encabezado titulo="Hoja de ruta" [subtitulo]="subtitulo()" volver="/viaje" />
 
 <main class="pagina">
-
   @if (error()) {
     <p class="alerta" [class.alerta-aviso]="desdeCopia()" [class.alerta-error]="!desdeCopia()" role="status">{{ error() }}</p>
   }
@@ -10,22 +9,155 @@
   }
 
   @if (hoja(); as h) {
-    <p class="texto-suave generada">Generada el {{ fechaHora(h.generadaEn) }} ({{ TEXTO_ZONA }}) · Salida {{ h.folio }}</p>
+    <section class="tarjeta telefonos" aria-label="Teléfonos">
+      @if (tel(h.telefonoEmpresa); as t) {
+        <div class="telefono">
+          <div class="telefono-datos">
+            <span class="etiqueta-seccion">Oficina</span>{{ ' ' }}
+            <span class="numero">{{ h.telefonoEmpresa }}</span>
+          </div>
+          <a class="btn btn-primario llamar" [href]="t" aria-label="Llamar a la oficina">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z" /></svg>
+            Llamar
+          </a>
+        </div>
+      }
+      @if (tel(h.telefonoTrafico); as t) {
+        <div class="telefono">
+          <div class="telefono-datos">
+            <span class="etiqueta-seccion">Tráfico, las 24 horas</span>{{ ' ' }}
+            <span class="numero">{{ h.telefonoTrafico }}</span>
+          </div>
+          <a class="btn btn-primario llamar" [href]="t" aria-label="Llamar a tráfico">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z" /></svg>
+            Llamar
+          </a>
+        </div>
+      }
+      @if (!tel(h.telefonoTrafico) && !tel(h.telefonoEmpresa)) {
+        <p class="texto-suave sin-telefonos">La oficina no capturó teléfonos en esta hoja.</p>
+      }
+    </section>
 
-    <section class="tarjeta" aria-labelledby="titulo-empresa">
-      <h2 id="titulo-empresa">{{ h.empresa || 'Empresa' }}</h2>
-      <div class="telefonos">
-        @if (tel(h.telefonoTrafico); as t) {
-          <a class="btn btn-primario btn-bloque" [href]="t">Llamar a tráfico (24 h): {{ h.telefonoTrafico }}</a>
+    @for (t of h.itinerario; track t.orden) {
+      @let c = casetasDe(h.folio, t);
+      <section class="tarjeta tramo" [attr.aria-label]="'Tramo ' + t.orden">
+        <div class="tramo-cabeza">
+          <h2 class="tramo-titulo">Tramo {{ t.orden }} · {{ t.tipo === 'cargado' ? 'cargado' : 'vacío' }}</h2>
+          @if (distancia(t)) {
+            <span class="texto-suave distancia">{{ distancia(t) }}</span>
+          }
+        </div>
+        @if (t.materialPeligroso) {
+          <p class="sin-margen"><span class="marca-peligro">MATERIAL PELIGROSO</span></p>
         }
-        @if (tel(h.telefonoEmpresa); as t) {
-          <a class="btn btn-secundario btn-bloque" [href]="t">Llamar a la oficina: {{ h.telefonoEmpresa }}</a>
+
+        <div class="recorrido">
+          <div class="guia" aria-hidden="true">
+            <span class="inicio"></span>
+            <span class="union"></span>
+            <span class="fin"></span>
+          </div>
+          <div class="lugares">
+            <div class="lugar origen">
+              <span class="oculto-visual">Origen: </span>
+              <span class="nombre">{{ t.origen.lugar }}</span>
+              @if (lineaOrigen(t)) {
+                <span class="detalle">{{ lineaOrigen(t) }}</span>
+              }
+            </div>
+            <div class="lugar destino">
+              <span class="oculto-visual">Destino: </span>
+              <span class="nombre">{{ t.destino.lugar }}</span>
+              @if (lineaDestino(t)) {
+                <span class="detalle">{{ lineaDestino(t) }}</span>
+              }
+            </div>
+          </div>
+        </div>
+
+        @if (t.ruta?.paradas?.length) {
+          <div class="bloque paradas">
+            <span class="etiqueta-seccion">{{ t.ruta!.paradas.length > 1 ? 'Paradas autorizadas' : 'Parada autorizada' }}</span>
+            @for (p of t.ruta!.paradas; track p.orden) {
+              <div class="parada">
+                <span class="parada-nombre">{{ parada(p.tipo) }}{{ p.referencia ? ' · ' + p.referencia : '' }}</span>
+                @if (p.direccion || p.notas) {
+                  <span class="detalle">{{ p.direccion && p.notas ? p.direccion + ' · ' + p.notas : (p.direccion || p.notas) }}</span>
+                }
+              </div>
+            }
+          </div>
         }
-        @if (!h.telefonoTrafico && !h.telefonoEmpresa) {
-          <p class="texto-suave">La oficina no capturó teléfonos en esta hoja.</p>
+
+        @if (c) {
+          <div class="bloque caseta">
+            @if (c.proxima; as prox) {
+              <div class="caseta-fila">
+                <div class="caseta-datos">
+                  <span class="etiqueta-seccion">Próxima caseta · {{ c.n }} de {{ c.total }}</span>{{ ' ' }}
+                  <span class="caseta-nombre">{{ prox.nombre }}</span>
+                </div>
+                <button type="button" class="btn btn-secundario ya-la-pase" (click)="pasar(h.folio, t.orden, c.total)">Ya la pasé</button>
+              </div>
+            } @else {
+              <span class="caseta-nombre sin-pendientes">Sin casetas pendientes</span>
+            }
+            <button type="button" class="btn btn-texto ver-todas" [attr.aria-expanded]="abierto(t.orden)" (click)="alternar(t.orden)">
+              {{ abierto(t.orden) ? 'Ocultar la lista' : 'Ver todas (' + c.total + ')' }}
+            </button>
+            @if (abierto(t.orden)) {
+              <ol class="lista-casetas">
+                @for (x of c.lista; track x.orden; let i = $index) {
+                  <li [class.pasada]="i < c.pasadas" [class.proxima]="i === c.pasadas">
+                    <span class="lista-nombre">{{ x.nombre }}{{ x.autopista ? ' (' + x.autopista + ')' : '' }}</span>{{ ' ' }}
+                    <span class="lista-estado">{{ i < c.pasadas ? 'Pasada' : i === c.pasadas ? 'Próxima' : '' }}</span>
+                  </li>
+                }
+              </ol>
+              @if (c.pasadas > 0) {
+                <button type="button" class="btn btn-secundario btn-bloque regresar-caseta" (click)="regresar(h.folio, t.orden)">
+                  Marqué una por error: regresar una
+                </button>
+              }
+            }
+          </div>
         }
-      </div>
+
+        @if (masDatos(t).length) {
+          <details class="mas-datos">
+            <summary>Más datos del tramo</summary>
+            <dl class="datos">
+              @for (d of masDatos(t); track d.etiqueta) {
+                <div>
+                  <dt>{{ d.etiqueta }}</dt>
+                  <dd>{{ d.valor }}</dd>
+                </div>
+              }
+            </dl>
+          </details>
+        }
+
+        @if (t.ruta?.ligaMapa; as liga) {
+          <a class="btn btn-secundario btn-bloque abrir-mapa" [href]="liga" target="_blank" rel="noopener noreferrer">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21z" /><circle cx="12" cy="9.5" r="2.5" /></svg>
+            Abrir en mapa
+          </a>
+        }
+      </section>
+    }
+
+    <h2 class="titulo-seccion">Datos de la salida</h2>
+    <section class="tarjeta" aria-label="Datos de la salida">
       <dl class="datos">
+        <div>
+          <dt>Empresa</dt>
+          <dd id="titulo-empresa">{{ h.empresa || 'Sin dato' }}</dd>
+        </div>
+        <div>
+          <dt>Salida</dt>
+          <dd>{{ h.folio }}</dd>
+        </div>
         @if (h.salidaProgramada) {
           <div>
             <dt>Salida programada</dt>
@@ -55,18 +187,6 @@
             </dd>
           </div>
         }
-        @if (h.notas) {
-          <div>
-            <dt>Notas de la salida</dt>
-            <dd>{{ h.notas }}</dd>
-          </div>
-        }
-      </dl>
-    </section>
-
-    <section class="tarjeta" aria-labelledby="titulo-unidad-hoja">
-      <h2 id="titulo-unidad-hoja">Unidad</h2>
-      <dl class="datos">
         <div>
           <dt>Unidad</dt>
           <dd>{{ h.unidad.numeroEconomico }} · {{ h.unidad.placas ? 'Placas ' + h.unidad.placas : 'Sin placas' }}</dd>
@@ -83,120 +203,18 @@
             <dd>{{ r.numeroEconomico }}{{ r.placas ? ' · Placas ' + r.placas : '' }}</dd>
           </div>
         }
+        @if (h.notas) {
+          <div>
+            <dt>Notas de la salida</dt>
+            <dd>{{ h.notas }}</dd>
+          </div>
+        }
+        <div>
+          <dt>Generada</dt>
+          <dd class="generada">{{ fechaHora(h.generadaEn) }} ({{ TEXTO_ZONA }})</dd>
+        </div>
       </dl>
     </section>
-
-    <h2>Itinerario</h2>
-    @for (t of h.itinerario; track t.orden) {
-      <section class="tarjeta tramo" [attr.aria-label]="'Tramo ' + t.orden">
-        <h3>Tramo {{ t.orden }} · {{ t.tipo === 'cargado' ? 'Cargado' : 'Vacío' }}{{ t.folio ? ' · ' + t.folio : '' }}</h3>
-        @if (t.cliente) {
-          <p class="cliente"><strong>{{ t.cliente }}</strong></p>
-        }
-        @if (t.materialPeligroso) {
-          <p><span class="marca-peligro">MATERIAL PELIGROSO</span></p>
-        }
-
-        <div class="lugar origen">
-          <span class="texto-suave">Origen</span>
-          <strong>{{ t.origen.lugar }}</strong>
-          @if (detalle(t.origen)) {
-            <span>{{ detalle(t.origen) }}</span>
-          }
-        </div>
-        <div class="lugar destino">
-          <span class="texto-suave">Destino</span>
-          <strong>{{ t.destino.lugar }}</strong>
-          @if (detalle(t.destino)) {
-            <span>{{ detalle(t.destino) }}</span>
-          }
-        </div>
-
-        <dl class="datos">
-          @if (t.citaCarga) {
-            <div>
-              <dt>Cita de carga</dt>
-              <dd>{{ fechaHora(t.citaCarga) }}</dd>
-            </div>
-          }
-          @if (t.citaDescarga) {
-            <div>
-              <dt>Cita de descarga</dt>
-              <dd>{{ fechaHora(t.citaDescarga) }}</dd>
-            </div>
-          }
-          @if (t.producto) {
-            <div>
-              <dt>Producto</dt>
-              <dd>{{ t.producto }}</dd>
-            </div>
-          }
-          @if (t.toneladasProgramadas != null) {
-            <div>
-              <dt>Toneladas programadas</dt>
-              <dd>{{ toneladas(t.toneladasProgramadas) }}</dd>
-            </div>
-          }
-          @if (t.referencia) {
-            <div>
-              <dt>Referencia</dt>
-              <dd>{{ t.referencia }}</dd>
-            </div>
-          }
-          @if (t.motivo) {
-            <div>
-              <dt>Motivo del vacío</dt>
-              <dd>{{ motivo(t.motivo) }}{{ t.motivoNota ? ' · ' + t.motivoNota : '' }}</dd>
-            </div>
-          }
-          @if (t.notas) {
-            <div>
-              <dt>Notas</dt>
-              <dd>{{ t.notas }}</dd>
-            </div>
-          }
-          @if (t.km != null) {
-            <div>
-              <dt>Distancia</dt>
-              <dd>{{ km(t.km) }}{{ t.ruta?.tiempo ? ' · ' + tiempo(t.ruta!.tiempo) : '' }}</dd>
-            </div>
-          }
-        </dl>
-
-        @if (t.ruta; as r) {
-          @if (r.nombre) {
-            <p class="texto-suave">Ruta: {{ r.nombre }}</p>
-          }
-          @if (r.paradas.length) {
-            <h4>Paradas autorizadas</h4>
-            <ol class="lista-simple paradas">
-              @for (p of r.paradas; track p.orden) {
-                <li>
-                  <strong>{{ parada(p.tipo) }}</strong>{{ p.referencia ? ': ' + p.referencia : '' }}
-                  @if (p.direccion) {
-                    <br /><span>{{ p.direccion }}</span>
-                  }
-                  @if (p.notas) {
-                    <br /><span class="texto-suave">{{ p.notas }}</span>
-                  }
-                </li>
-              }
-            </ol>
-          }
-          @if (r.plazasCobro.length) {
-            <h4>Casetas</h4>
-            <ol class="lista-simple casetas">
-              @for (c of r.plazasCobro; track c.orden) {
-                <li>{{ c.nombre }}{{ c.autopista ? ' (' + c.autopista + ')' : '' }}</li>
-              }
-            </ol>
-          }
-          @if (r.ligaMapa) {
-            <a class="btn btn-secundario btn-bloque abrir-mapa" [href]="r.ligaMapa" target="_blank" rel="noopener noreferrer">Abrir en mapa</a>
-          }
-        }
-      </section>
-    }
   } @else if (estado() === 'listo') {
     <section class="tarjeta tarjeta-destacada sin-hoja" role="status">
       <h2>No tiene una salida activa</h2>
@@ -212,7 +230,4 @@
       {{ estado() === 'cargando' ? 'Actualizando…' : 'Actualizar' }}
     </button>
   </div>
-  @if (guardadaEn()) {
-    <p class="texto-suave actualizado">Guardada en el teléfono: {{ fechaHora(guardadaEn()) }}</p>
-  }
 </main>

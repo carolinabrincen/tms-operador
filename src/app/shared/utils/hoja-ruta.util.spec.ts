@@ -10,7 +10,7 @@ describe('hoja-ruta.util: la hoja en pantalla', () => {
   });
 
   it('fin estimado es solo fecha: dd/MM/yyyy sin convertir de zona', () => {
-    expect(fechaSinHora('2026-11-27')).toBe('27/11/2026');
+    expect(fechaSinHora('2026-11-27')).toBe('27 nov 2026');
     expect(fechaSinHora('mañana')).toBe('mañana');
     expect(fechaSinHora(null)).toBe('');
   });

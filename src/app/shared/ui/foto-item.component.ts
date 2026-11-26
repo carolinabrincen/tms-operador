@@ -47,7 +47,7 @@ import { cuandoNegocio, fechaHoraNegocio } from '../utils/zona-negocio.util';
   `,
   styles: `
     .foto-item h3 {
-      font-size: 1.05rem;
+      font-size: var(--texto-dato);
     }
     .miniatura {
       display: block;

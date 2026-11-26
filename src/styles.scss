@@ -1,7 +1,7 @@
 /*
- * Estilos globales de la app del operador. Primero celular: una columna (máximo 480 px, centrada en pantallas
- * anchas), tarjetas blancas redondeadas sobre fondo gris claro, botones grandes y acciones abajo, al alcance del
- * pulgar. Sin librerías de interfaz. Colores, radios y espacios: SOLO en src/tema.scss.
+ * Estilos globales de la app del operador (referencia aprobada el 26/11/2026). Primero celular: una columna (máximo
+ * 480 px, centrada en pantallas anchas), fondo gris claro, tarjetas blancas con borde fino, botones grandes y las
+ * acciones abajo, al alcance del pulgar. Sin librerías de interfaz. Colores, radios y medidas: SOLO en src/tema.scss.
  */
 @use 'tema';
 
@@ -22,17 +22,21 @@ body {
   color: var(--c-texto);
   font-family: var(--fuente);
   font-size: var(--texto-normal);
-  font-weight: var(--peso-normal);
-  line-height: 1.5;
+  font-weight: 400;
+  line-height: 1.45;
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Toda la app en una columna centrada (encabezado incluido). */
+/* Toda la app en una columna centrada. Con datos de ejemplo, deja lugar a la franja fija de arriba. */
 app-root {
   display: block;
   max-width: var(--ancho-max);
   min-height: 100vh;
   margin: 0 auto;
+  background: var(--c-fondo-pagina);
+}
+app-root.con-ejemplo {
+  padding-top: var(--alto-franja-ejemplo);
 }
 
 h1,
@@ -41,20 +45,21 @@ h3,
 h4 {
   line-height: 1.25;
   margin: 0 0 var(--espacio-2);
-  font-weight: var(--peso-titulo);
+  font-weight: 700;
 }
 h1 {
-  font-size: 1.5rem;
+  font-size: var(--texto-titulo);
+  letter-spacing: -0.01em;
 }
 h2 {
-  font-size: 1.15rem;
+  font-size: var(--texto-telefono);
   margin-top: var(--espacio-6);
 }
 h3 {
-  font-size: 1.05rem;
+  font-size: var(--texto-dato);
 }
 h4 {
-  font-size: 1rem;
+  font-size: var(--texto-normal);
 }
 p {
   margin: 0 0 var(--espacio-3);
@@ -62,12 +67,20 @@ p {
 
 a {
   color: var(--c-primario);
-  font-weight: var(--peso-medio);
+  font-weight: 600;
+}
+a:hover {
+  color: var(--c-primario-oscuro);
 }
 
 strong,
 b {
-  font-weight: var(--peso-titulo);
+  font-weight: 700;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
 }
 
 :focus-visible {
@@ -86,47 +99,49 @@ b {
   }
 }
 
+.oculto-visual {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
 /* ---------------------------------------------------------------- Página */
 
 .pagina {
-  padding: var(--espacio-4) var(--espacio-4) calc(var(--alto-menu) + var(--seguro-abajo) + var(--espacio-8));
+  padding: var(--espacio-4) var(--margen-lado) calc(var(--alto-menu) + 28px + var(--seguro-abajo));
 }
 
 .texto-suave {
   color: var(--c-texto-suave);
 }
 
-/* Título de sección ("Siguiente paso", "Línea de tiempo"…). */
+/* Título de sección ("Línea de tiempo", "Fotos de evidencia"…). */
 .titulo-seccion {
-  margin: var(--espacio-5) 0 var(--espacio-3);
-  font-size: 1.05rem;
+  margin: var(--espacio-6) 0 var(--espacio-3);
+  font-size: var(--texto-telefono);
 }
-/* Rótulo chico encima de un dato ("Estatus actual"). */
+/* Rótulo chico encima de un dato ("Oficina", "Parada autorizada"). */
 .etiqueta-seccion {
-  margin: 0 0 var(--espacio-1);
+  margin: 0;
   font-size: var(--texto-chico);
-  font-weight: var(--peso-medio);
+  font-weight: 400;
   color: var(--c-texto-suave);
-}
-
-.enlace-volver {
-  display: inline-flex;
-  align-items: center;
-  min-height: 48px;
-  text-decoration: none;
 }
 
 /* Estado vacío ("Todavía no…"): tarjeta tranquila, centrada. */
 .estado-vacio {
   padding: var(--espacio-6) var(--espacio-4);
-  border: 1px dashed var(--c-borde-campo);
+  border: 1px dashed var(--c-texto-suave);
   border-radius: var(--radio-tarjeta);
   background: var(--c-superficie);
   color: var(--c-texto-suave);
   text-align: center;
 }
 
-/* ---------------------------------------------------------------- Botones */
+/* ---------------------------------------------------------------- Botones (≥ 50 px; el principal, 72 px) */
 
 .btn {
   display: inline-flex;
@@ -134,12 +149,12 @@ b {
   justify-content: center;
   gap: var(--espacio-2);
   min-height: var(--alto-boton);
-  padding: 10px 18px;
-  border: 1px solid transparent;
+  padding: 8px 16px;
+  border: 1.5px solid transparent;
   border-radius: var(--radio-boton);
   font: inherit;
-  font-size: 1rem;
-  font-weight: var(--peso-titulo);
+  font-size: var(--texto-normal);
+  font-weight: 700;
   line-height: 1.2;
   text-align: center;
   text-decoration: none;
@@ -148,8 +163,8 @@ b {
 }
 .btn svg {
   flex: none;
-  width: 22px;
-  height: 22px;
+  width: 18px;
+  height: 18px;
   fill: none;
   stroke: currentColor;
   stroke-width: 2;
@@ -166,42 +181,48 @@ b {
 }
 .btn-primario:hover {
   background: var(--c-primario-oscuro);
+  color: var(--c-sobre-primario);
 }
-/* Neutro: fondo blanco y borde fino. */
-.btn-secundario,
+/* Contorno negro sobre blanco ("Ya la pasé", "Abrir en mapa", "Tráfico"). */
+.btn-secundario {
+  background: var(--c-superficie);
+  color: var(--c-texto);
+  border-color: var(--c-texto);
+}
+.btn-secundario:hover {
+  background: var(--c-fondo-pagina);
+  color: var(--c-texto);
+}
+/* Neutro: blanco con borde fino (la fila de Incidencia, Foto y Otro paso). */
 .btn-neutro {
   background: var(--c-superficie);
   color: var(--c-texto);
-  border-color: var(--c-borde);
-  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+  border: 1px solid var(--c-borde);
+  border-radius: var(--radio-boton-medio);
 }
-.btn-secundario:hover,
 .btn-neutro:hover {
-  background: var(--c-superficie-neutra);
-}
-/* Incidencia: ámbar suave con su icono. */
-.btn-incidencia {
-  background: var(--c-aviso-fondo);
-  color: var(--c-aviso-texto);
-  border-color: var(--c-aviso-borde);
-}
-.btn-incidencia svg {
-  color: var(--c-aviso-icono);
+  background: var(--c-fondo-pagina);
+  color: var(--c-texto);
 }
 .btn-texto {
   background: transparent;
   color: var(--c-primario);
-  min-height: 48px;
   padding: 8px 12px;
 }
-/* El botón principal: todo el ancho, alto, texto a la izquierda y flecha a la derecha. */
-.btn-grande {
+/* El botón principal de cada pantalla: 72 px, texto de 24 px y flecha a la derecha. */
+.btn-principal {
   min-height: var(--alto-boton-principal);
-  border-radius: var(--radio-boton-grande);
-  font-size: 1.1rem;
+  padding: 8px 22px;
+  border: none;
+  border-radius: var(--radio-boton-principal);
+  font-size: var(--texto-titulo);
   justify-content: space-between;
   text-align: left;
-  padding: 12px 18px 12px 20px;
+}
+.btn-principal svg {
+  width: 28px;
+  height: 28px;
+  stroke-width: 2.4;
 }
 .btn-ocupado {
   opacity: 0.75;
@@ -223,30 +244,15 @@ b {
   padding: var(--espacio-4);
   margin: 0 0 var(--espacio-3);
   background: var(--c-superficie);
-  box-shadow: var(--sombra-tarjeta);
 }
-.tarjeta > h2:first-child,
-.tarjeta > p:first-child + h2 {
+.tarjeta > h2:first-child {
   margin-top: 0;
 }
-/* Resaltada: un toque del azul, sin bordes gruesos. */
 .tarjeta-destacada {
-  border-color: #c9d8f5;
-  background: var(--c-superficie);
-  box-shadow:
-    inset 4px 0 0 var(--c-primario),
-    var(--sombra-tarjeta);
-}
-/* La tarjeta que se monta sobre el borde inferior del encabezado azul. */
-.tarjeta-montada {
-  position: relative;
-  z-index: 1;
-  margin-top: calc(-1 * var(--espacio-8) - var(--espacio-4));
-  box-shadow: var(--sombra-flotante);
+  border: 1.5px solid var(--c-texto);
 }
 .tarjeta-apagada {
-  background: var(--c-superficie-neutra);
-  box-shadow: none;
+  background: var(--c-fondo-pagina);
 }
 .tarjeta-cabeza {
   display: flex;
@@ -262,12 +268,35 @@ b {
   margin: 0;
 }
 .ruta {
-  font-size: 1.05rem;
-  font-weight: var(--peso-medio);
+  font-size: var(--texto-normal);
+  font-weight: 600;
   margin: 4px 0 8px;
 }
+/* Renglón al pie de una tarjeta que lleva a otra pantalla ("Hoja de ruta · próxima caseta: Fortín ›"). */
+.renglon-enlace {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--espacio-2);
+  min-height: var(--alto-boton);
+  padding: 0 12px 0 16px;
+  border-top: 1px solid var(--c-borde);
+  font-size: var(--texto-normal);
+  font-weight: 700;
+  text-decoration: none;
+}
+.renglon-enlace svg {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 
-/* Lista de datos: etiqueta arriba, valor abajo (se lee bien en pantallas angostas). */
+/* Lista de datos: etiqueta arriba (14 px), valor abajo (16 px). */
 .datos {
   display: grid;
   gap: var(--espacio-3);
@@ -279,25 +308,25 @@ b {
 }
 .datos dt {
   font-size: var(--texto-chico);
-  font-weight: var(--peso-normal);
+  font-weight: 400;
   color: var(--c-texto-suave);
 }
 .datos dd {
   margin: 0;
-  font-size: 1rem;
-  font-weight: var(--peso-medio);
+  font-size: var(--texto-normal);
+  font-weight: 600;
   overflow-wrap: anywhere;
 }
 
-/* ---------------------------------------------------------------- Píldoras de estado */
+/* ---------------------------------------------------------------- Píldoras de estado (14 px) */
 
 .chip {
   display: inline-block;
-  padding: 3px 10px;
+  padding: 3px 12px;
   border-radius: var(--radio-pildora);
   border: 1px solid transparent;
   font-size: var(--texto-chico);
-  font-weight: var(--peso-medio);
+  font-weight: 700;
   line-height: 1.4;
   white-space: nowrap;
 }
@@ -312,14 +341,15 @@ b {
   color: var(--c-info-texto);
 }
 .chip-por-confirmar {
-  background: var(--c-superficie-neutra);
+  background: var(--c-superficie);
   color: var(--c-texto);
-  border-color: var(--c-borde);
+  border-color: var(--c-texto-suave);
 }
 .chip-cerrado,
 .chip-hecho {
-  background: var(--c-superficie-neutra);
+  background: var(--c-fondo-pagina);
   color: var(--c-texto-suave);
+  border-color: var(--c-borde);
 }
 .chip-confirmado,
 .chip-recibida {
@@ -337,30 +367,31 @@ b {
   color: #fff;
 }
 .chip-toca {
-  background: var(--c-primario);
-  color: var(--c-sobre-primario);
+  background: var(--c-marca);
+  color: var(--c-marca-texto);
 }
 
 /* Material peligroso en la hoja de ruta: negro sobre amarillo, como el rombo de la placa (se respeta por norma). */
 .marca-peligro {
   display: inline-block;
-  padding: 3px 10px;
+  padding: 3px 12px;
   border-radius: var(--radio-pildora);
   background: #ffd400;
   color: #000;
   font-size: var(--texto-chico);
-  font-weight: var(--peso-titulo);
+  font-weight: 700;
   letter-spacing: 0.04em;
 }
 
-/* ---------------------------------------------------------------- Avisos */
+/* ---------------------------------------------------------------- Avisos: qué pasó y qué hacer */
 
 .alerta {
   border-radius: var(--radio-boton);
   border: 1px solid transparent;
   padding: var(--espacio-3) 14px;
   margin: 0 0 var(--espacio-3);
-  font-weight: var(--peso-medio);
+  font-size: var(--texto-normal);
+  font-weight: 500;
 }
 .alerta-info {
   background: var(--c-info-fondo);
@@ -388,28 +419,34 @@ b {
   margin-bottom: var(--espacio-4);
 }
 .campo label {
-  font-weight: var(--peso-medio);
+  font-size: var(--texto-normal);
+  font-weight: 700;
 }
 .campo input,
 .campo textarea {
   width: 100%;
-  min-height: var(--alto-boton);
+  min-height: 56px;
   padding: 12px 14px;
-  border: 1px solid var(--c-borde-campo);
+  border: 1.5px solid var(--c-texto-suave);
   border-radius: var(--radio-boton);
   font: inherit;
-  font-size: 1.15rem;
+  font-size: var(--texto-telefono);
   background: var(--c-superficie);
   color: var(--c-texto);
+}
+.campo input::placeholder,
+.campo textarea::placeholder {
+  color: var(--c-texto-suave);
+  opacity: 1;
 }
 .campo input:focus,
 .campo textarea:focus {
   border-color: var(--c-primario);
-  outline: 3px solid var(--c-primario-suave);
+  outline: 3px solid var(--c-info-fondo);
   outline-offset: 0;
 }
 .campo textarea {
-  font-size: 1rem;
+  font-size: var(--texto-normal);
   min-height: 96px;
   resize: vertical;
 }
@@ -419,7 +456,7 @@ b {
 }
 .campo-error {
   color: var(--c-error);
-  font-weight: var(--peso-medio);
+  font-weight: 600;
   margin: 0;
 }
 .campo-con-boton {
@@ -427,8 +464,11 @@ b {
   grid-template-columns: 1fr auto;
   gap: var(--espacio-2);
 }
+.campo-con-boton .btn {
+  min-height: 56px;
+}
 
-/* ---------------------------------------------------------------- Diálogo (hoja inferior, al alcance del pulgar) */
+/* ---------------------------------------------------------------- Diálogo: hoja inferior, al alcance del pulgar */
 
 .velo {
   position: fixed;
@@ -447,33 +487,43 @@ b {
   overflow-y: auto;
   background: var(--c-superficie);
   border-radius: var(--radio-hoja) var(--radio-hoja) 0 0;
-  padding: var(--espacio-6) var(--espacio-4) calc(var(--espacio-4) + var(--seguro-abajo));
+  padding: 28px var(--margen-lado) calc(var(--espacio-4) + var(--seguro-abajo));
   box-shadow: var(--sombra-flotante);
 }
 /* Asa de la hoja. */
 .hoja::before {
   content: '';
   position: absolute;
-  top: 8px;
+  top: 10px;
   left: 50%;
-  width: 40px;
-  height: 4px;
-  margin-left: -20px;
+  width: 44px;
+  height: 5px;
+  margin-left: -22px;
   border-radius: var(--radio-pildora);
   background: var(--c-borde);
 }
 .hoja h2 {
   margin-top: 0;
-  font-size: 1.2rem;
+  font-size: var(--texto-titulo);
 }
-/* Opciones de una hoja (tipo de incidencia, tipo de foto, otro paso). */
+.hoja .acciones .btn {
+  min-height: 56px;
+  font-size: var(--texto-dato);
+}
+/* Opciones grandes de una hoja (tipo de incidencia, tipo de foto, otro paso). */
 .opciones,
 .otros-lista {
   display: grid;
-  gap: var(--espacio-2);
-  margin: var(--espacio-2) 0 var(--espacio-3);
+  gap: 10px;
+  margin: var(--espacio-3) 0;
+}
+.opcion {
+  justify-content: flex-start;
+  min-height: 56px;
+  text-align: left;
+  font-size: var(--texto-dato);
 }
 .opcion.btn-secundario {
-  justify-content: flex-start;
-  text-align: left;
+  border: 1px solid var(--c-borde);
+  border-radius: var(--radio-boton-medio);
 }

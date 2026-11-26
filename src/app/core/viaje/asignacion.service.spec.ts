@@ -33,7 +33,7 @@ describe('AsignacionService: viaje del operador, también sin señal', () => {
     expect(servicio.estado()).toBe('listo');
     expect(servicio.desdeCopia()).toBe(true);
     expect(servicio.asignacion()?.salida?.folio).toBe('SAL-2026-00418');
-    expect(servicio.error()).toBe('Sin conexión con la oficina. Se muestra lo guardado el 23/11/2026 10:00.');
+    expect(servicio.error()).toBe('Sin conexión con la oficina: se muestra lo guardado (23 nov, 10:00\u00a0a.\u00a0m.). Se actualizará solo al volver la señal.');
   });
 
   it('sin señal y sin copia: error claro', async () => {

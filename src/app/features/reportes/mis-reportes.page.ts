@@ -16,7 +16,7 @@ import { horaNegocio } from '../../shared/utils/zona-negocio.util';
   styles: `
     .leyenda {
       display: grid;
-      gap: var(--espacio-2);
+      gap: 10px;
       padding: var(--espacio-4);
       margin: 0 0 var(--espacio-4);
       list-style: none;
@@ -45,7 +45,7 @@ export class MisReportesPage implements OnInit {
       return;
     }
     if (!this.enLinea()) {
-      this.mensajes.mostrar('Sin conexión. Sus reportes están guardados y se enviarán solos al volver la señal.', 'aviso');
+      this.mensajes.mostrar('Sin señal: sus reportes quedaron guardados y se enviarán solos al volver la señal.', 'aviso');
       return;
     }
     await this.cola.procesar();
@@ -55,7 +55,7 @@ export class MisReportesPage implements OnInit {
 
   protected async actualizarEstados(): Promise<void> {
     if (!this.enLinea()) {
-      this.mensajes.mostrar('Sin conexión: no se puede consultar a la oficina ahora.', 'aviso');
+      this.mensajes.mostrar('Sin señal: no se puede consultar a la oficina ahora. Intente cuando tenga señal.', 'aviso');
       return;
     }
     await this.cola.actualizarEstados();

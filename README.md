@@ -47,15 +47,16 @@ service worker, la ubicación y `crypto.randomUUID` no funcionan en `http://` sa
   vuelve a ofrecer (el nuevo reporte lleva otro id).
 - El `mensaje` del servidor (acuse y estado) ya viene legible y se muestra tal cual, sin traducir nada dentro.
 - Sin salida activa (`{ "salida": null }`, también cuando la oficina cierra o cancela la salida): Mi viaje dice "No tiene
-  un viaje activo" y "Mis reportes" conserva todo lo reportado.
+  un viaje activo" y "Reportes" conserva todo lo reportado.
 - La hora del reporte es la del teléfono: si va adelantada (el servidor rechaza más de 10 minutos), la app avisa desde
   los 5 minutos comparando con la hora del servidor de cada acuse.
 
 ## Incidencias abiertas y "Ya continué" (contrato M1, secciones 2 y 7)
 
-- La asignación trae `incidenciasAbiertas` (también las que registró la oficina). En Mi viaje, arriba de "Siguiente paso",
-  hay una tarjeta ámbar por cada una: tipo, "desde las 14:07" (hora del negocio), su nota y el botón **Ya continué**.
-- "Ya continué" pide confirmar (nota opcional) y manda el término por **la misma cola** que los reportes: id propio,
+- La asignación trae `incidenciasAbiertas` (también las que registró la oficina). En Mi viaje, arriba del botón
+  principal, hay un aviso ámbar delgado por cada una: tipo, "Abierta desde 2:07 p. m." (hora del negocio) y el botón
+  **Ya continué** a la derecha.
+- "Ya continué" pide confirmar (muestra la nota de la incidencia; nota propia opcional) y manda el término por **la misma cola** que los reportes: id propio,
   se guarda primero en el teléfono, se envía con señal, reenviar el mismo id no duplica y lleva la ubicación si hay
   permiso. En cola, la tarjeta dice "Pendiente de enviar" y no repite el botón. Si el servidor responde que ya estaba
   terminada (por usted, por un estatus o por la oficina), se toma como hecho, sin error.
@@ -66,12 +67,15 @@ service worker, la ubicación y `crypto.randomUUID` no funcionan en `http://` sa
 
 ## Hoja de ruta (contrato M2, sección 1)
 
-- "Mi viaje" → **Ver hoja de ruta** (`/hoja-ruta`): empresa y teléfonos (tráfico 24 h y oficina; al tocarlos, llama),
-  unidad y remolques, y cada tramo en orden con cliente, origen y destino (con dirección si la ruta está completa),
-  citas en hora del negocio, producto con **MATERIAL PELIGROSO** si aplica, toneladas, referencia, notas o motivo del
-  vacío, paradas autorizadas y casetas por nombre. **Abrir en mapa** por tramo con `ligaMapa` (solo ligas https).
+- Mi viaje → renglón **Hoja de ruta · próxima caseta: …** (`/hoja-ruta`): teléfonos de oficina y de tráfico con
+  **Llamar**; por tramo, origen y destino con una línea de detalle, **MATERIAL PELIGROSO** si aplica, la parada
+  autorizada y **solo la próxima caseta** ("Próxima caseta · 1 de 3", su nombre en grande y **Ya la pasé**). "Ya la
+  pasé" se recuerda en el teléfono por salida (`core/hoja-ruta/casetas.service.ts`, solo conteos); **Ver todas** abre la
+  lista completa (y permite regresar una marcada por error); al terminar, "Sin casetas pendientes". Lo demás del tramo
+  (cliente, producto, toneladas, referencia, motivo del vacío, notas) va plegado en "Más datos del tramo".
+  **Abrir en mapa** por tramo con `ligaMapa` (solo ligas https). Al final, datos de la salida y de la unidad.
 - Se guarda en el teléfono (localStorage, por operador) para verla sin señal y se vuelve a pedir al recuperar la señal.
-  Muestra "Generada el …" y, si se ve la copia guardada, avisa que puede no estar al día. Sin salida activa lo dice.
+  El encabezado dice "al día …" y, si se ve la copia guardada, avisa que puede no estar al día. Sin salida activa lo dice.
 - Nunca lleva importes: la traducción de la API arma cada campo por lista blanca y una prueba de guarda lo revisa.
 
 ## Evidencias (contrato M2, sección 2)
@@ -90,7 +94,8 @@ service worker, la ubicación y `crypto.randomUUID` no funcionan en `http://` sa
 - **Galería del viaje**: las fotos del operador se descargan con el token al tocar "Ver foto" y se muestran como blob; las
   de la oficina aparecen solo como renglón ("Subida por la oficina"), sin pedir su archivo (el servidor da 404 y no es un
   error). La app no anula fotos.
-- Menú **Evidencias** (`/evidencias`): todas las fotos del teléfono con su estado.
+- Menú **Fotos** (`/evidencias`): todas las fotos del teléfono con su estado. En Mi viaje, el botón **Foto** abre la
+  hoja para tomarla (solo viajes cargados).
 
 ## Estatus del viaje
 
@@ -130,17 +135,32 @@ service worker, la ubicación y `crypto.randomUUID` no funcionan en `http://` sa
 - Con el teléfono sin señal (modo avión, o "Offline" en DevTools), los reportes quedan pendientes y se envían solos al
   volver la conexión.
 
-## Estilo visual
+## Estilo visual (referencia aprobada el 26/11/2026)
 
-- Colores, radios, espacios, letra y sombras: **solo** en `src/tema.scss` (variables CSS). Fondo gris muy claro, tarjetas
-  blancas con borde fino, esquinas con una sola escala (tarjetas 18 px, botones 14 a 16 px, píldoras), títulos en peso
-  600 como máximo. Un solo color fuerte (el azul de la marca); ámbar suave para incidencias y avisos; rojo para errores.
-- Todo el texto tiene contraste ≥ 4.5:1 (valores calculados en el encabezado de `tema.scss`), los botones miden ≥ 48 px
-  de alto y el texto de cuerpo ≥ 14 px.
-- Cada pantalla pone su encabezado azul con `app-encabezado` (`shared/ui/encabezado.component.ts`): alto en Mi viaje
-  (viaje, estatus en grande y barra de avance), más bajo con flecha de regreso en las demás. Ahí van "Salir", "Datos de
-  ejemplo" y los avisos de conexión y pendientes.
-- En pantallas anchas la app es una columna centrada de 480 px (encabezado y menú incluidos).
+- La referencia está en `docs/diseno-app-operador/mi-viaje.html` y `hoja-ruta.html` (carpeta de documentos). Sus tokens
+  (colores, radios, medidas, letra Manrope con respaldo `system-ui`) están **solo** en `src/tema.scss`.
+- Criterios de aceptación (operador promedio de 42 años, en ruta; heurísticas de Nielsen): ningún texto menor de 13 px
+  (solo etiquetas del menú y de la línea de avance), datos de 16-17 px, secundarios de 14 px, todo en rem; texto
+  secundario nunca más claro que #4B5563 y contraste ≥ 4.5:1 (prueba en `core/config/tema-colores.spec.ts`); botón
+  principal de 72 px y los demás de 50 a 64 px.
+- **Mi viaje**: barra con nombre corto, unidad y el estado real de la cola ("Con señal · todo enviado", "Enviando…",
+  "Sin señal · 2 por enviar") y **Tráfico** (llama al teléfono de tráfico de la hoja guardada; si no hay, a la oficina;
+  si no hay ninguno, no aparece). Bloque oscuro del paso actual ("Usted está aquí · paso 4 de 10", estatus en 40 px con
+  su nombre formal, "desde …" y la línea por hitos con el marcador amarillo en la posición real). Origen y destino
+  (tocarlos abre el detalle del viaje) con el renglón de la hoja de ruta. Abajo, el **botón principal** con el paso en
+  palabras del operador ("Ya cargué") y su línea de ayuda ("Toque cuando termine la carga"), y la fila **Incidencia ·
+  Foto · Otro paso**.
+- **Deshacer**: al tocar el botón principal, el reporte se guarda y espera 8 s (`LAPSO_DESHACER_MS`) antes de enviarse;
+  mientras, "Guardado: «Ya cargué», 11:32 a. m." con **Deshacer**, que lo borra sin enviar nada. La ubicación se agrega
+  si llega en ese lapso. Si se cierra la app durante el lapso, se envía al volver. Mientras el navegador vaya a pedir el
+  permiso de ubicación, primero se abre la hoja con la explicación.
+- Menú inferior: Mi viaje, Reportes, Fotos y **Mi cuenta** (celular, "Gastos, próximamente" y **Salir** con
+  confirmación). Con datos de ejemplo, franja fija arriba: "Datos de ejemplo: no son viajes reales".
+- Horas en 12 horas ("1:26 p. m.") en la zona del negocio; fechas cortas ("29 nov"). Al entrar, una vez por sesión:
+  "Por su seguridad, use la app con la unidad detenida." (no bloquea). Sin señal no es error: "Quedó guardado y se
+  enviará solo cuando haya señal."
+- El detalle del viaje (`/viaje/:id`) tiene lo que no cabe en Mi viaje: datos, fotos, línea de tiempo, los demás viajes
+  de la salida, la unidad y "Actualizar".
 
 ## Marca (nombre visible)
 
@@ -161,7 +181,7 @@ src/
         http/                     implementación real (contrato M1): traducción y errores en *.util.ts
       almacen/                    base IndexedDB (cola de reportes, credenciales y cola de fotos)
       evidencias/                 cola de fotos (IndexedDB) y su almacén
-      hoja-ruta/                  hoja de ruta con copia en el teléfono
+      hoja-ruta/                  hoja de ruta con copia en el teléfono y casetas pasadas
       reloj/                      aviso de hora del teléfono mal puesta
       sesion/                     almacén de sesión (sin PIN), entrar/salir, guards
       viaje/                      asignación (salida y viajes, con copia para ver sin señal) y refresco
@@ -171,12 +191,13 @@ src/
     features/
       acceso/                     celular + PIN
       viaje/                      Mi viaje y el detalle de cada viaje (/viaje/:id)
-      reportes/                   Mis reportes
+      reportes/                   Reportes
       hoja-ruta/                  Hoja de ruta
-      evidencias/                 Evidencias (fotos del teléfono)
+      evidencias/                 Fotos (las del teléfono)
+      cuenta/                     Mi cuenta (Salir, Gastos próximamente)
     shared/
       utils/                      lógica pura (*.util.ts) con sus pruebas: estatus, incidencias, línea de tiempo…
-      ui/                         encabezado, barra de avance, trayecto, panel de avance, línea de tiempo, datos del viaje…
+      ui/                         encabezado, paso actual, trayecto, panel de avance, línea de tiempo, datos del viaje…
     testing/                      apoyo para pruebas (fuera del build de la app)
 scripts/marca.mjs                 aplica la marca e iconos
 ```
@@ -192,4 +213,4 @@ scripts/marca.mjs                 aplica la marca e iconos
 - La app nunca hace retroceder un viaje ni pone Asignado o Cerrado. Los hitos los confirma la oficina.
 - El operador nunca ve tarifas, ingresos, costos, utilidad, pagos ni importes (tampoco de casetas o diésel). Esos campos
   no existen en los modelos, y las pruebas lo verifican sobre los datos de ejemplo y sobre la traducción de la API real.
-- Horas siempre en la zona del negocio (America/Mexico_City), en formato dd/MM/yyyy HH:mm.
+- Horas siempre en la zona del negocio (America/Mexico_City), en 12 horas ("29 nov, 1:26 p. m.").

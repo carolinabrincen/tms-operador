@@ -1,31 +1,33 @@
-<!-- El encabezado azul lo pone cada pantalla (app-encabezado): en Mi viaje es alto y lleva el estatus. -->
+@if (esEjemplo) {
+  <div class="franja-ejemplo" role="note">Datos de ejemplo: no son viajes reales</div>
+}
+
 <router-outlet />
 
 @if (sesion()) {
   <nav class="menu" aria-label="Menú principal">
-    <a routerLink="/viaje" routerLinkActive="activo" class="menu-item">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 7h11v9H2zM13 10h4l3 3v3h-7zM6 19a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zm11 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z" /></svg>
+    <a routerLink="/viaje" routerLinkActive="activo" ariaCurrentWhenActive="page" class="menu-item">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 7h11v9H2z" /><path d="M13 10h4l4 3v3h-8z" /><circle cx="6.5" cy="17.5" r="1.8" /><circle cx="17" cy="17.5" r="1.8" /></svg>
       Mi viaje
     </a>
-    <a routerLink="/reportes" routerLinkActive="activo" class="menu-item">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1zM9 8h6M9 12h6M9 16h4" /></svg>
-      Mis reportes
+    <a routerLink="/reportes" routerLinkActive="activo" ariaCurrentWhenActive="page" class="menu-item">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6z" /><path d="M9 12h7" /><path d="M9 16h7" /></svg>
+      Reportes
       @if (cola.pendientes() > 0) {
-        <span class="menu-globo" aria-label="pendientes">{{ cola.pendientes() }}</span>
+        <span class="menu-globo"><span class="oculto-visual">Por enviar: </span>{{ cola.pendientes() }}</span>
       }
     </a>
-    <a routerLink="/evidencias" routerLinkActive="activo" class="menu-item">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1zM12 17a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z" /></svg>
-      Evidencias
+    <a routerLink="/evidencias" routerLinkActive="activo" ariaCurrentWhenActive="page" class="menu-item">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z" /><circle cx="12" cy="13" r="3.5" /></svg>
+      Fotos
       @if (fotos.pendientes() > 0) {
-        <span class="menu-globo" aria-label="fotos pendientes">{{ fotos.pendientes() }}</span>
+        <span class="menu-globo"><span class="oculto-visual">Por enviar: </span>{{ fotos.pendientes() }}</span>
       }
     </a>
-    <button type="button" class="menu-item menu-pronto" (click)="proximamente('Gastos')">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1zM3 10h18M7 15h4" /></svg>
-      Gastos
-      <small>Próximamente</small>
-    </button>
+    <a routerLink="/cuenta" routerLinkActive="activo" ariaCurrentWhenActive="page" class="menu-item">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.5" /><path d="M5 20a7 7 0 0 1 14 0" /></svg>
+      Mi cuenta
+    </a>
   </nav>
 }
 

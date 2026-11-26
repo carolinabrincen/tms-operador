@@ -1,82 +1,93 @@
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { Viaje } from '../../core/api/operador-api.modelos';
 import { ConexionService } from '../../core/conexion/conexion.service';
+import { CasetasService } from '../../core/hoja-ruta/casetas.service';
+import { HojaRutaService } from '../../core/hoja-ruta/hoja-ruta.service';
 import { MensajesService } from '../../core/mensajes/mensajes.service';
 import { ColaReportesService } from '../../core/reportes/cola-reportes.service';
 import { AsignacionService } from '../../core/viaje/asignacion.service';
 import { activarRefrescoDelViaje } from '../../core/viaje/refresco-viaje';
-import { BarraAvanceComponent } from '../../shared/ui/barra-avance.component';
-import { DatosViajeComponent } from '../../shared/ui/datos-viaje.component';
 import { EncabezadoComponent } from '../../shared/ui/encabezado.component';
 import { IncidenciasAbiertasComponent } from '../../shared/ui/incidencias-abiertas.component';
-import { EtiquetaEstatusComponent } from '../../shared/ui/etiqueta-estatus.component';
-import { LineaTiempoComponent } from '../../shared/ui/linea-tiempo.component';
 import { PanelAvanceComponent } from '../../shared/ui/panel-avance.component';
+import { PasoActualComponent } from '../../shared/ui/paso-actual.component';
 import { SugerenciaAcuseComponent } from '../../shared/ui/sugerencia-acuse.component';
 import { TrayectoComponent } from '../../shared/ui/trayecto.component';
-import { Guia, guia, marcaDeGuia, origenDestino, viajeActivo, viajeQueToca, viajesEnOrden } from '../../shared/utils/estatus-viaje.util';
-import { lineaDeTiempo } from '../../shared/utils/linea-tiempo.util';
-import { cuandoNegocio } from '../../shared/utils/zona-negocio.util';
+import { estadoCasetas, textoRenglonHoja, tramoDeViaje } from '../../shared/utils/casetas.util';
+import { viajeActivo, viajesEnOrden } from '../../shared/utils/estatus-viaje.util';
 
+/**
+ * Mi viaje (referencia aprobada, mi-viaje.html): barra con señal y "Tráfico"; el paso actual resaltado; origen y destino
+ * con el renglón de la hoja de ruta; incidencias abiertas; y abajo, al alcance del pulgar, el botón principal y la fila
+ * Incidencia · Foto · Otro paso. Lo demás (datos, fotos, línea de tiempo, otros viajes) está en el detalle del viaje.
+ */
 @Component({
   selector: 'app-mi-viaje',
   imports: [
     RouterLink,
     EncabezadoComponent,
-    IncidenciasAbiertasComponent,
-    BarraAvanceComponent,
+    PasoActualComponent,
     TrayectoComponent,
-    PanelAvanceComponent,
-    DatosViajeComponent,
-    LineaTiempoComponent,
-    EtiquetaEstatusComponent,
+    IncidenciasAbiertasComponent,
     SugerenciaAcuseComponent,
+    PanelAvanceComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './mi-viaje.page.html',
   styles: `
-    /* Dentro del encabezado azul. */
-    .enc-titulo-viaje {
-      margin: 0;
-      font-size: 1rem;
-      font-weight: var(--peso-medio);
-      color: var(--c-sobre-primario);
-    }
-    .enc-estatus {
-      margin-top: var(--espacio-4);
-    }
-    .enc-rotulo {
+    /* Ocupa la pantalla: las acciones quedan abajo, justo arriba del menú. */
+    :host {
       display: flex;
-      flex-wrap: wrap;
+      flex-direction: column;
+      min-height: 100dvh;
+    }
+    :host-context(.con-ejemplo) {
+      min-height: calc(100dvh - var(--alto-franja-ejemplo));
+    }
+    .pagina-viaje {
+      display: flex;
+      flex: 1;
+      flex-direction: column;
+      padding-bottom: calc(var(--alto-menu) + 17px + var(--espacio-3) + var(--seguro-abajo));
+    }
+    app-paso-actual {
+      margin-top: 0;
+    }
+    .tarjeta-ruta {
+      display: flex;
+      flex-direction: column;
+      margin: 12px 0 0;
+      padding: 0;
+    }
+    /* Tocar origen y destino abre el detalle del viaje (datos, fotos, línea de tiempo). */
+    .ver-detalle {
+      display: flex;
       align-items: center;
-      justify-content: space-between;
-      gap: var(--espacio-2);
-      margin: 0 0 var(--espacio-1);
-      font-size: var(--texto-chico);
-      color: var(--c-sobre-primario-suave);
-    }
-    .ahora-etiqueta {
-      padding: 2px 10px;
-      border-radius: var(--radio-pildora);
-      border: 1px solid var(--c-sobre-primario-borde);
-      color: var(--c-sobre-primario);
-      font-size: var(--texto-chico);
-      font-weight: var(--peso-medio);
-    }
-    .viaje-enlace {
-      display: block;
+      padding-right: 12px;
       color: inherit;
+      font-weight: 400;
       text-decoration: none;
-      font-weight: var(--peso-normal);
     }
-    .ver-hoja-ruta {
-      margin: var(--espacio-2) 0 var(--espacio-4);
+    .ver-detalle app-trayecto {
+      flex: 1;
+      min-width: 0;
     }
-    .actualizado {
-      margin-top: var(--espacio-2);
-      text-align: center;
-      font-size: var(--texto-chico);
+    .ver-detalle svg {
+      flex: none;
+      width: 20px;
+      height: 20px;
+      fill: none;
+      stroke: var(--c-texto-suave);
+      stroke-width: 2.2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .empuje {
+      flex: 1;
+      min-height: var(--espacio-4);
+    }
+    .alerta-texto {
+      margin: 0 0 var(--espacio-3);
     }
   `,
 })
@@ -85,23 +96,23 @@ export class MiViajePage implements OnInit {
   private readonly cola = inject(ColaReportesService);
   private readonly conexion = inject(ConexionService);
   private readonly mensajes = inject(MensajesService);
-
-  protected readonly ruta = origenDestino;
-  protected readonly cuando = (iso: string | null) => cuandoNegocio(iso);
+  private readonly hojaRuta = inject(HojaRutaService);
+  private readonly casetas = inject(CasetasService);
 
   protected readonly estado = this.asignacionSrv.estado;
   protected readonly error = this.asignacionSrv.error;
   protected readonly asignacion = this.asignacionSrv.asignacion;
-  protected readonly actualizadaEn = this.asignacionSrv.actualizadaEn;
   protected readonly salida = computed(() => this.asignacion()?.salida ?? null);
   protected readonly viajes = computed(() => viajesEnOrden(this.salida()));
   protected readonly activo = computed(() => viajeActivo(this.salida(), this.cola.reportes()));
-  protected readonly toca = computed(() => viajeQueToca(this.salida(), this.cola.reportes()));
-  /** Sin salida activa (la oficina la cerró o canceló) los reportes de antes siguen en "Mis reportes". */
+  /** Sin salida activa (la oficina la cerró o canceló) los reportes de antes siguen en "Reportes". */
   protected readonly hayReportes = computed(() => this.cola.reportes().length > 0);
-  protected readonly linea = computed(() => {
-    const v = this.activo();
-    return v ? lineaDeTiempo(v, this.cola.reportes()) : [];
+  /** "Hoja de ruta · próxima caseta: Fortín" del tramo del viaje activo (de la hoja guardada en el teléfono). */
+  protected readonly textoHoja = computed(() => {
+    const hoja = this.hojaRuta.hojaRuta();
+    const tramo = tramoDeViaje(hoja, this.activo());
+    if (!hoja || !tramo) return textoRenglonHoja(null);
+    return textoRenglonHoja(estadoCasetas(tramo.ruta?.plazasCobro, this.casetas.pasadas(hoja.folio, tramo.orden)));
   });
 
   constructor() {
@@ -111,15 +122,7 @@ export class MiViajePage implements OnInit {
   ngOnInit(): void {
     void this.asignacionSrv.asegurar();
     void this.cola.actualizarEstados();
-  }
-
-  /** Estatus efectivo (incluye lo que el operador ya reportó y el servidor aún no refleja). */
-  protected guiaDe(v: Viaje): Guia {
-    return guia(v, this.cola.reportes());
-  }
-
-  protected marcaDe(v: Viaje): string | null {
-    return marcaDeGuia(this.guiaDe(v));
+    void this.hojaRuta.asegurar(); // "Tráfico" y la próxima caseta salen de la hoja guardada
   }
 
   protected async actualizar(): Promise<void> {
@@ -128,7 +131,7 @@ export class MiViajePage implements OnInit {
       return;
     }
     if (!this.conexion.enLinea()) {
-      this.mensajes.mostrar('Sin conexión: no se puede actualizar ahora. Se muestra lo último guardado.', 'aviso');
+      this.mensajes.mostrar('Sin señal: se muestra lo último guardado. Se actualizará solo al volver la señal.', 'aviso');
       return;
     }
     await Promise.all([this.asignacionSrv.cargar(), this.cola.actualizarEstados()]);

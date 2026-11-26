@@ -1,6 +1,7 @@
 import { Routes } from '@angular/router';
 import { conSesionGuard, sinSesionGuard } from './core/sesion/sesion.guards';
 import { AccesoPage } from './features/acceso/acceso.page';
+import { CuentaPage } from './features/cuenta/cuenta.page';
 import { EvidenciasPage } from './features/evidencias/evidencias.page';
 import { HojaRutaPage } from './features/hoja-ruta/hoja-ruta.page';
 import { MisReportesPage } from './features/reportes/mis-reportes.page';
@@ -20,6 +21,7 @@ export const routes: Routes = [
       { path: 'reportes', component: MisReportesPage },
       { path: 'hoja-ruta', component: HojaRutaPage },
       { path: 'evidencias', component: EvidenciasPage },
+      { path: 'cuenta', component: CuentaPage },
       // Rutas del paso 1 (por si quedó un acceso directo guardado).
       { path: 'despacho', redirectTo: 'viaje' },
       { path: '', pathMatch: 'full', redirectTo: 'viaje' },

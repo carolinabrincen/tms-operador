@@ -9,7 +9,7 @@ import { EstatusViaje } from '../api/operador-api.modelos';
 import { FORMATO_UUID_V4 } from '../../shared/utils/id-reporte.util';
 import { EntornoPruebas, configurar, crearEntorno, entrarComo, ponerEnLinea } from '../../testing/entorno-pruebas';
 import { AlmacenReportesIndexedDb } from './almacen-reportes';
-import { ColaReportesService, NuevoReporte } from './cola-reportes.service';
+import { ColaReportesService, LAPSO_DESHACER_MS, NuevoReporte } from './cola-reportes.service';
 
 /** Reporte de estatus sobre el viaje 2 (cargado) del ejemplo. */
 function nuevo(estatus: EstatusViaje = 'EnPosicionamiento', viajeId = 'ej-via-771'): NuevoReporte {
@@ -416,5 +416,83 @@ describe('ColaReportesService: guardar primero, enviar después, reintentar sin 
       await cola.actualizarEstados();
       expect(consulta).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('ColaReportesService: lapso para deshacer (botón principal)', () => {
+  const LAPSO = 120;
+  let e: EntornoPruebas;
+  let cola: ColaReportesService;
+  let api: OperadorApiEjemplo;
+
+  beforeEach(async () => {
+    e = crearEntorno();
+    configurar(e, [{ provide: LAPSO_DESHACER_MS, useValue: LAPSO }]);
+    api = TestBed.inject(OPERADOR_API) as OperadorApiEjemplo;
+    await entrarComo();
+    cola = TestBed.inject(ColaReportesService);
+    await cola.listo();
+  });
+
+  it('por omisión el lapso es de 8 segundos', () => {
+    TestBed.resetTestingModule();
+    configurar(crearEntorno());
+    expect(TestBed.inject(LAPSO_DESHACER_MS)).toBe(8000);
+  });
+
+  it('se GUARDA de inmediato pero no se envía antes del lapso; pasado el lapso, se envía solo', async () => {
+    const r = await cola.registrar(nuevo(), { retener: true });
+    expect((await new AlmacenReportesIndexedDb(e.idb).todos()).map((x) => x.id)).toEqual([r.id]);
+    expect(cola.retenidos()).toEqual([r.id]);
+    await cola.procesar(); // aunque se pida enviar, espera su lapso
+    expect(api.totalRecibidos).toBe(0);
+    expect(cola.pendientes()).toBe(1);
+    await vi.waitFor(() => expect(cola.reportes()[0]?.estado).toBe('enviado'));
+    expect(api.totalRecibidos).toBe(1);
+    expect(cola.retenidos()).toEqual([]);
+  });
+
+  it('"Deshacer" dentro del lapso lo cancela sin enviar nada (y lo borra del teléfono)', async () => {
+    const r = await cola.registrar(nuevo(), { retener: true });
+    expect(await cola.deshacer(r.id)).toBe(true);
+    expect(cola.reportes()).toEqual([]);
+    expect(cola.retenidos()).toEqual([]);
+    expect(await new AlmacenReportesIndexedDb(e.idb).todos()).toEqual([]);
+    await new Promise((ok) => setTimeout(ok, LAPSO * 2));
+    await cola.procesar();
+    expect(api.totalRecibidos).toBe(0);
+  });
+
+  it('pasado el lapso ya no se puede deshacer; los reportes sin lapso salen de inmediato', async () => {
+    const r = await cola.registrar(nuevo(), { retener: true });
+    await vi.waitFor(() => expect(cola.reportes()[0]?.estado).toBe('enviado'));
+    expect(await cola.deshacer(r.id)).toBe(false);
+    expect(cola.reportes()).toHaveLength(1);
+    const sinLapso = await cola.registrar(nuevo('EnPatioOrigen'));
+    await cola.inactivo();
+    expect(cola.reportes().find((x) => x.id === sinLapso.id)!.estado).not.toBe('pendiente');
+  });
+
+  it('sin señal: pasado el lapso queda pendiente como siempre y se envía al volver la señal', async () => {
+    ponerEnLinea(e, false);
+    await cola.registrar(nuevo(), { retener: true });
+    await new Promise((ok) => setTimeout(ok, LAPSO * 2));
+    await cola.inactivo();
+    expect(cola.retenidos()).toEqual([]);
+    expect(cola.pendientes()).toBe(1);
+    ponerEnLinea(e, true);
+    await vi.waitFor(() => expect(cola.pendientes()).toBe(0));
+    expect(api.totalRecibidos).toBe(1);
+  });
+
+  it('la ubicación que llega durante el lapso se agrega al reporte; después ya no se toca', async () => {
+    const sinPunto = { ...nuevo(), ubicacion: null };
+    const r = await cola.registrar(sinPunto, { retener: true });
+    const punto = { lat: 19.4, lng: -99.1, precisionM: 8, tomadoEn: '2026-11-23T16:00:02Z' };
+    await cola.completarUbicacion(r.id, punto);
+    expect(cola.reportes()[0].reporte.ubicacion).toEqual(punto);
+    await vi.waitFor(() => expect(cola.reportes()[0]?.estado).toBe('enviado'));
+    await cola.completarUbicacion(r.id, { ...punto, lat: 0 });
+    expect(cola.reportes()[0].reporte.ubicacion).toEqual(punto);
   });
 });

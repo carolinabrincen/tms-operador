@@ -87,7 +87,7 @@ export class AsignacionService {
       this.estadoSig.set(hayCopia ? 'listo' : 'error');
       this.errorSig.set(
         hayCopia
-          ? `Sin conexión con la oficina. Se muestra lo guardado el ${fechaHoraNegocio(this.actualizadaEnSig())}.`
+          ? `Sin conexión con la oficina: se muestra lo guardado (${fechaHoraNegocio(this.actualizadaEnSig(), undefined, this.reloj())}). Se actualizará solo al volver la señal.`
           : 'No se pudo cargar su viaje. Revise su señal e intente de nuevo.',
       );
     }

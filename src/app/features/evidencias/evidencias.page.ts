@@ -15,7 +15,7 @@ import { viajesEnOrden } from '../../shared/utils/estatus-viaje.util';
   imports: [RouterLink, EncabezadoComponent, FotoItemComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <app-encabezado titulo="Evidencias" volver="/viaje" />
+    <app-encabezado titulo="Fotos" subtitulo="Fotos de evidencia de sus viajes" />
     <main class="pagina">
       <p class="texto-suave">Las fotos se guardan primero en el teléfono y se envían solas cuando hay señal.</p>
 
@@ -67,7 +67,9 @@ import { viajesEnOrden } from '../../shared/utils/estatus-viaje.util';
       list-style: none;
     }
     .ir-viaje {
-      margin-bottom: 8px;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      border: 1px solid var(--c-borde);
     }
   `,
 })
@@ -96,7 +98,7 @@ export class EvidenciasPage implements OnInit {
       return;
     }
     if (!this.conexion.enLinea()) {
-      this.mensajes.mostrar('Sin conexión. Sus fotos están guardadas y se enviarán solas al volver la señal.', 'aviso');
+      this.mensajes.mostrar('Sin señal: sus fotos quedaron guardadas y se enviarán solas al volver la señal.', 'aviso');
       return;
     }
     await this.cola.procesar();
@@ -106,7 +108,7 @@ export class EvidenciasPage implements OnInit {
 
   protected async actualizarEstados(): Promise<void> {
     if (!this.conexion.enLinea()) {
-      this.mensajes.mostrar('Sin conexión: no se puede consultar a la oficina ahora.', 'aviso');
+      this.mensajes.mostrar('Sin señal: no se puede consultar a la oficina ahora. Intente cuando tenga señal.', 'aviso');
       return;
     }
     await this.cola.actualizarEstados();

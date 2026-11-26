@@ -22,19 +22,28 @@ async function montar(e: EntornoPruebas = crearEntorno()) {
 }
 
 describe('Mi viaje: incidencias abiertas y "Ya continué"', () => {
-  it('tarjeta ámbar ARRIBA de "Siguiente paso": tipo, "desde las 09:20" (hora del negocio), nota y botón grande "Ya continué"', async () => {
+  it('aviso ámbar delgado ARRIBA del botón principal: tipo, "Abierta desde 9:20 a. m." y "Ya continué" a la derecha', async () => {
     const { el } = await montar();
     const main = el.querySelector('main')!;
     const tarjeta = main.querySelector('.tarjeta-incidencia')!;
     expect(tarjeta.querySelector('.tipo')!.textContent).toBe('Retén o inspección');
-    expect(tarjeta.querySelector('.desde')!.textContent).toBe('desde las 09:20');
-    expect(tarjeta.querySelector('.nota')!.textContent).toBe('“Revisión de documentos a la salida del patio”');
+    expect(tarjeta.querySelector('.desde')!.textContent).toBe('Abierta desde 9:20\u00a0a.\u00a0m.');
     const boton = tarjeta.querySelector('.ya-continue')!;
     expect(boton.textContent!.trim()).toBe('Ya continué');
-    expect(boton.classList).toContain('btn-grande');
-    // Orden: la incidencia va antes del panel "Siguiente paso".
+    // El botón va al final del aviso (a la derecha).
+    expect(tarjeta.lastElementChild).toBe(boton);
+    // Orden: la incidencia va antes del panel con el botón principal.
     const panel = main.querySelector('app-panel-avance')!;
     expect(tarjeta.compareDocumentPosition(panel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('la nota de la incidencia se ve al confirmar "Ya continué"', async () => {
+    const { el, boton, estable } = await montar();
+    boton('Ya continué').click();
+    await vi.waitFor(async () => {
+      await estable();
+      expect(el.querySelector('.hoja .nota')?.textContent).toBe('“Revisión de documentos a la salida del patio”');
+    });
   });
 
   it('"Ya continué" pide confirmar con nota opcional; en cola dice "Pendiente de enviar" sin repetir el botón; con señal, desaparece', async () => {

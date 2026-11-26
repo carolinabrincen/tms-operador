@@ -1,31 +1,13 @@
-@if (activo(); as v) {
-  <app-encabezado [principal]="true">
-    <div enc-arriba class="enc-viaje">
-      <h1 class="enc-titulo-viaje">Viaje {{ v.orden }} de {{ viajes().length }} · {{ v.tipo === 'cargado' ? 'Cargado' : 'Vacío' }}</h1>
-    </div>
-    <div class="enc-estatus">
-      <p class="enc-rotulo">
-        Estatus actual
-        <span class="ahora-etiqueta">{{ v === toca() ? 'Le toca' : 'Esperando a la oficina' }}</span>
-      </p>
-      <app-etiqueta-estatus [estatus]="guiaDe(v).estatus" [marca]="marcaDe(v)" tamano="encabezado" />
-      <app-barra-avance [viaje]="v" [sobreAzul]="true" />
-    </div>
-  </app-encabezado>
-} @else {
-  <app-encabezado titulo="Mi viaje" />
-}
+<app-encabezado [principal]="true" [unidad]="salida()?.unidad?.numeroEconomico ?? null" />
 
-<main class="pagina">
-  @if (activo(); as v) {
-    <!-- Primero: se monta sobre el borde inferior del encabezado. -->
-    <section class="tarjeta tarjeta-montada tarjeta-viaje" aria-label="Origen y destino">
-      <app-trayecto [viaje]="v" />
-    </section>
-  }
-
+<main class="pagina pagina-viaje">
   @if (error()) {
-    <p class="alerta" [class.alerta-aviso]="asignacion()" [class.alerta-error]="!asignacion()" role="status">{{ error() }}</p>
+    <div class="alerta" [class.alerta-aviso]="asignacion()" [class.alerta-error]="!asignacion()" role="status">
+      <p class="alerta-texto">{{ error() }}</p>
+      <button type="button" class="btn btn-secundario btn-bloque" [class.btn-ocupado]="estado() === 'cargando'" (click)="actualizar()">
+        {{ estado() === 'cargando' ? 'Actualizando…' : 'Intentar de nuevo' }}
+      </button>
+    </div>
   }
 
   @if (!asignacion()) {
@@ -34,15 +16,28 @@
     }
   } @else {
     @if (activo(); as v) {
-      <!-- Arriba de "Siguiente paso": las incidencias que siguen abiertas (también las de la oficina). -->
-      <app-incidencias-abiertas [salida]="salida()" />
-      <app-panel-avance [viaje]="v" />
+      <app-paso-actual [viaje]="v" />
 
-      <section class="tarjeta" aria-label="Datos del viaje">
-        <app-datos-viaje [viaje]="v" [omitirTrayecto]="true" />
+      <section class="tarjeta tarjeta-ruta" aria-label="Origen y destino">
+        <a [routerLink]="['/viaje', v.id]" class="ver-detalle">
+          <app-trayecto [viaje]="v" />
+          <span class="oculto-visual">
+            Ver detalle y línea de tiempo{{ viajes().length > 1 ? ' del viaje ' + v.orden + ' de ' + viajes().length : '' }}
+          </span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
+        </a>
+        <a routerLink="/hoja-ruta" class="renglon-enlace renglon-hoja">
+          {{ textoHoja() }}
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg>
+        </a>
       </section>
 
-      <app-linea-tiempo [entradas]="linea()" />
+      <app-incidencias-abiertas [salida]="salida()" />
+      <app-sugerencia-acuse [viajes]="viajes()" />
+
+      <div class="empuje"></div>
+
+      <app-panel-avance [viaje]="v" />
     } @else {
       <section class="tarjeta tarjeta-destacada sin-viaje" role="status">
         <h2>No tiene un viaje activo</h2>
@@ -53,69 +48,5 @@
       </section>
       <app-incidencias-abiertas [salida]="salida()" />
     }
-
-    @if (salida(); as s) {
-      <app-sugerencia-acuse [viajes]="viajes()" />
-      <a routerLink="/hoja-ruta" class="btn btn-secundario btn-bloque ver-hoja-ruta">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14" /></svg>
-        Ver hoja de ruta
-      </a>
-
-      @if (viajes().length > 1) {
-        <h2 class="titulo-seccion">Viajes de esta salida</h2>
-        @for (v of viajes(); track v.id) {
-          <a class="tarjeta viaje-enlace" [class.tarjeta-apagada]="v.estatus === 'Cerrado' || v.estatus === 'Cancelado'" [routerLink]="['/viaje', v.id]">
-            <div class="tarjeta-cabeza">
-              <h3>Viaje {{ v.orden }} · {{ v.tipo === 'cargado' ? 'Cargado' : 'Vacío' }}</h3>
-              @if (v === toca()) {
-                <span class="chip chip-toca">Le toca</span>
-              }
-            </div>
-            <app-etiqueta-estatus [estatus]="guiaDe(v).estatus" [marca]="marcaDe(v)" tamano="mediano" />
-            <p class="ruta">{{ ruta(v).origen }} → {{ ruta(v).destino }}</p>
-            <span class="texto-suave">Ver detalle y línea de tiempo ›</span>
-          </a>
-        }
-      }
-
-      <section class="tarjeta" aria-labelledby="titulo-unidad">
-        <h2 id="titulo-unidad">Unidad</h2>
-        <dl class="datos">
-          <div>
-            <dt>Unidad</dt>
-            <dd>{{ s.unidad.numeroEconomico }} · {{ s.unidad.placas ? 'Placas ' + s.unidad.placas : 'Sin placas' }}</dd>
-          </div>
-          <div>
-            <dt>Configuración</dt>
-            <dd>{{ s.unidad.configuracion }}</dd>
-          </div>
-          @if (s.unidad.remolques.length) {
-            <div>
-              <dt>Remolque{{ s.unidad.remolques.length > 1 ? 's' : '' }}</dt>
-              <dd>{{ s.unidad.remolques.join(', ') }}</dd>
-            </div>
-          }
-          @if (s.notas) {
-            <div>
-              <dt>Notas de la salida</dt>
-              <dd>{{ s.notas }}</dd>
-            </div>
-          }
-          <div>
-            <dt>Salida</dt>
-            <dd>{{ s.folio }}</dd>
-          </div>
-        </dl>
-      </section>
-    }
-  }
-
-  <div class="acciones">
-    <button type="button" class="btn btn-secundario btn-bloque" [class.btn-ocupado]="estado() === 'cargando'" (click)="actualizar()">
-      {{ estado() === 'cargando' ? 'Actualizando…' : 'Actualizar' }}
-    </button>
-  </div>
-  @if (actualizadaEn()) {
-    <p class="texto-suave actualizado">Actualizado: {{ cuando(actualizadaEn()) }}</p>
   }
 </main>

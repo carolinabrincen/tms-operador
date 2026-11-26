@@ -1,34 +1,42 @@
 <section class="panel" aria-label="Reportar">
-  <!-- El estatus actual lo muestra la pantalla arriba (encabezado o tarjeta del viaje). -->
+  <!-- El estatus actual lo muestra la pantalla arriba (bloque del paso actual). -->
   @if (cancelado()) {
     <p class="alerta alerta-aviso">La oficina canceló este viaje. Ya no se reporta nada en él.</p>
   } @else if (terminado()) {
     <p class="alerta alerta-info">Este viaje ya está cerrado.</p>
   } @else {
-    <h2 class="titulo-seccion">Siguiente paso</h2>
-    @if (siguiente(); as s) {
-      <button type="button" class="btn btn-primario btn-bloque btn-grande paso-siguiente" (click)="pedirEstatus(s)">
-        {{ boton(s) }}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+    @if (retenido(); as r) {
+      <!-- Lapso para deshacer: ya está guardado, todavía no se envía. -->
+      <div class="guardado" role="status">
+        <span class="guardado-texto">Guardado: «{{ boton(r.estatus) }}», {{ hora(r.ocurrioEn) }}</span>
+        <button type="button" class="deshacer" (click)="deshacer(r.id)">Deshacer</button>
+      </div>
+    } @else if (siguiente(); as s) {
+      <button type="button" class="btn btn-primario btn-bloque btn-principal paso-siguiente" [class.btn-ocupado]="guardando()" (click)="tocarPrincipal(s)">
+        <span class="textos">
+          <span class="ayuda">{{ ayuda(s) }}</span>{{ ' ' }}
+          <span class="accion">{{ boton(s) }}</span>
+        </span>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14" /><path d="M13 6l6 6-6 6" /></svg>
       </button>
-      @if (esHito(s)) {
-        <p class="texto-suave paso-nota">La oficina lo confirmará (ahí captura toneladas y estadía).</p>
-      }
     } @else {
-      <p class="alerta alerta-exito">
-        Ya reportó “{{ ultimoPaso() ? boton(ultimoPaso()!) : ETIQUETA_ESTATUS[guia().estatus] }}”. La oficina cerrará el viaje.
+      <p class="alerta alerta-exito ya-termino">
+        Ya reportó «{{ ultimoPaso() ? boton(ultimoPaso()!) : ETIQUETA_ESTATUS[guia().estatus] }}». La oficina cerrará el viaje.
       </p>
     }
 
-    <div class="secundarias" [class.una-sola]="!otros().length">
-      @if (otros().length) {
-        <button type="button" class="btn btn-neutro otro-paso" (click)="eligiendoPaso.set(true)">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h9" /></svg>
-          Otro paso
-        </button>
-      }
-      <button type="button" class="btn btn-incidencia incidencia" (click)="pedirIncidencia()">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4 2.5 20h19L12 4zM12 10v4.5M12 17.2v.1" /></svg>
+    <div class="fila">
+      <button type="button" class="btn btn-neutro incidencia" (click)="pedirIncidencia()">
+        <svg class="icono-aviso" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l9.5 17h-19z" /><path d="M12 10v4" /><path d="M12 17.2v.1" /></svg>
         Incidencia
+      </button>
+      <button type="button" class="btn btn-neutro foto" (click)="pedirFoto()">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z" /><circle cx="12" cy="13" r="3.5" /></svg>
+        Foto
+      </button>
+      <button type="button" class="btn btn-neutro otro-paso" (click)="pedirOtroPaso()">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16" /><path d="M4 12h16" /><path d="M4 17h10" /></svg>
+        Otro paso
       </button>
     </div>
   }
@@ -37,25 +45,32 @@
 @if (eligiendoPaso()) {
   <div class="velo" (click)="eligiendoPaso.set(false)">
     <section class="hoja" role="dialog" aria-modal="true" aria-labelledby="titulo-otro-paso" (click)="$event.stopPropagation()">
-      <h2 id="titulo-otro-paso">Otro paso (puede saltar)</h2>
+      <h2 id="titulo-otro-paso">Otro paso</h2>
+      <p class="texto-suave">Puede saltar pasos. Los que salte ya no se podrán reportar.</p>
       <div class="otros-lista">
         @for (e of otros(); track e) {
           <button type="button" class="btn btn-secundario btn-bloque opcion" (click)="elegirOtroPaso(e)">{{ boton(e) }}</button>
         }
       </div>
-      <button type="button" class="btn btn-texto btn-bloque" (click)="eligiendoPaso.set(false)">Cancelar</button>
+      <div class="acciones">
+        <button type="button" class="btn btn-secundario btn-bloque" (click)="eligiendoPaso.set(false)">Cancelar</button>
+      </div>
     </section>
   </div>
+}
+
+@if (fotoAbierta()) {
+  <app-hoja-foto [viaje]="viaje()" (cerrar)="fotoAbierta.set(false)" />
 }
 
 @if (borrador(); as b) {
   <div class="velo" (click)="cancelar()">
     <section class="hoja" role="dialog" aria-modal="true" aria-labelledby="titulo-hoja" (click)="$event.stopPropagation()">
       @if (b.tipo === 'estatus') {
-        <h2 id="titulo-hoja">¿Reportar “{{ boton(b.estatus) }}”?</h2>
+        <h2 id="titulo-hoja">¿Reportar «{{ boton(b.estatus) }}»?</h2>
         <p>El viaje pasará a <strong>{{ ETIQUETA_ESTATUS[b.estatus] }}</strong>.</p>
         @if (esHito(b.estatus)) {
-          <p class="alerta alerta-info">Es un hito: quedará “Pendiente de confirmar por oficina”.</p>
+          <p class="alerta alerta-info">Es un hito: quedará «Pendiente de confirmar por oficina».</p>
         }
         @if (b.saltados.length) {
           <p class="alerta alerta-aviso">
@@ -63,8 +78,8 @@
           </p>
         }
       } @else {
-        <h2 id="titulo-hoja">Reportar incidencia</h2>
-        <p>¿Qué pasó? No cambia el estatus del viaje.</p>
+        <h2 id="titulo-hoja">¿Qué pasó?</h2>
+        <p class="texto-suave">La incidencia no cambia el estatus del viaje.</p>
         <div class="opciones" role="radiogroup" aria-label="Tipo de incidencia">
           @for (t of INCIDENCIAS; track t) {
             <button

@@ -57,12 +57,12 @@ import { TEXTO_ZONA_NEGOCIO, cuandoNegocio, fechaHoraNegocio } from '../utils/zo
     }
     .linea-hora {
       font-size: var(--texto-chico);
-      font-weight: var(--peso-medio);
+      font-weight: 600;
       color: var(--c-texto-suave);
     }
     .linea-texto {
       font-size: 1rem;
-      font-weight: var(--peso-titulo);
+      font-weight: 700;
     }
     .linea-quien {
       font-size: var(--texto-chico);

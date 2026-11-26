@@ -11,6 +11,7 @@ import { TarjetaIncidencia, tarjetasIncidencias, textoDesde } from '../utils/inc
 import { LARGO_NOTA, textoIncidencia } from '../utils/incidencias.util';
 import { ESPERA_GPS_MS, EXPLICACION_UBICACION, EstadoPermisoUbicacion, textoUbicacionEnReporte } from '../utils/ubicacion.util';
 import { ahoraIsoUtc } from '../utils/zona-negocio.util';
+import { TEXTO_GUARDADO_SIN_SENAL } from './panel-avance.component';
 
 const ESPERA_GPS_CON_PREGUNTA_MS = 20_000;
 
@@ -22,8 +23,8 @@ interface Confirmando {
 }
 
 /**
- * Incidencias abiertas de la salida (contrato M1, sección 2), también las que registró la oficina: una tarjeta ámbar
- * por cada una, con "Ya continué" (sección 7). El término va por la cola del teléfono, como los reportes. No bloquea
+ * Incidencias abiertas de la salida (contrato M1, sección 2), también las que registró la oficina: un aviso ámbar
+ * delgado por cada una, con "Ya continué" a la derecha (sección 7); la nota de la incidencia se ve al confirmar. El término va por la cola del teléfono, como los reportes. No bloquea
  * nada: si el operador reporta su siguiente paso, el servidor las termina solas.
  */
 @Component({
@@ -34,30 +35,25 @@ interface Confirmando {
       <section class="incidencias" aria-label="Incidencias abiertas">
         @for (t of tarjetas(); track t.clave) {
           <article class="tarjeta-incidencia" [class.en-cola]="t.estado !== 'abierta'">
-            <div class="cabeza">
-              <svg class="icono" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4 2.5 20h19L12 4zM12 10v4.5M12 17.2v.1" /></svg>
+            <svg class="icono" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l9.5 17h-19z" /><path d="M12 10v4" /><path d="M12 17.2v.1" /></svg>
+            <div class="info">
               <h3 class="tipo">{{ texto(t.tipo) }}</h3>
+              <p class="desde">Abierta {{ desde(t.ocurrioEn) }}</p>
               @if (t.estado === 'termino-pendiente') {
-                <span class="chip chip-pendiente">Pendiente de enviar</span>
+                <p class="aclaracion">Se enviará solo en cuanto haya señal.</p>
               } @else if (t.estado === 'incidencia-pendiente') {
-                <span class="chip chip-{{ t.estadoReporte }}">{{ etiqueta(t.estadoReporte) }}</span>
+                <p class="aclaracion">Podrá marcar «Ya continué» cuando la oficina la reciba.</p>
+              }
+              @if (t.error) {
+                <p class="error-termino" role="alert">{{ t.error }}</p>
               }
             </div>
-            <p class="desde">{{ desde(t.ocurrioEn) }}</p>
-            @if (t.nota) {
-              <p class="nota">“{{ t.nota }}”</p>
-            }
-            @if (t.error) {
-              <p class="campo-error" role="alert">{{ t.error }}</p>
-            }
             @if (t.estado === 'abierta') {
-              <button type="button" class="btn btn-primario btn-bloque btn-grande ya-continue" (click)="pedir(t)">
-                Ya continué<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
-              </button>
+              <button type="button" class="ya-continue" (click)="pedir(t)">Ya continué</button>
             } @else if (t.estado === 'termino-pendiente') {
-              <p class="texto-suave aclaracion">Se enviará solo en cuanto haya señal.</p>
+              <span class="chip chip-pendiente">Pendiente de enviar</span>
             } @else {
-              <p class="texto-suave aclaracion">Podrá marcar “Ya continué” en cuanto la oficina la reciba.</p>
+              <span class="chip chip-{{ t.estadoReporte }}">{{ etiqueta(t.estadoReporte) }}</span>
             }
           </article>
         }
@@ -72,6 +68,9 @@ interface Confirmando {
             <strong>{{ texto(c.tarjeta.tipo) }}</strong>, {{ desde(c.tarjeta.ocurrioEn) }}. Se avisa a la oficina que ya siguió su
             camino.
           </p>
+          @if (c.tarjeta.nota) {
+            <p class="nota">“{{ c.tarjeta.nota }}”</p>
+          }
           <div class="campo">
             <label for="nota-ya-continue">Nota (opcional)</label>
             <textarea id="nota-ya-continue" rows="3" [attr.maxlength]="LARGO_NOTA" [value]="nota()" (input)="escribirNota($event)"></textarea>
@@ -98,56 +97,75 @@ interface Confirmando {
   styles: `
     .incidencias {
       display: grid;
-      gap: var(--espacio-3);
-      margin: var(--espacio-4) 0 0;
+      gap: 10px;
+      margin: 12px 0 0;
     }
+    /* Aviso ámbar delgado (referencia): icono, tipo y "Abierta desde…", y "Ya continué" a la derecha. */
     .tarjeta-incidencia {
-      padding: var(--espacio-4);
-      border: 1px solid var(--c-aviso-borde);
-      border-radius: var(--radio-tarjeta);
-      background: var(--c-aviso-fondo);
-      color: var(--c-aviso-texto);
-    }
-    .cabeza {
       display: flex;
       align-items: center;
-      flex-wrap: wrap;
-      gap: var(--espacio-2);
+      gap: 10px;
+      padding: 10px 10px 10px 14px;
+      border: 1.5px solid var(--c-aviso-borde);
+      border-radius: var(--radio-tarjeta);
+      background: var(--c-aviso-fondo);
     }
     .icono {
       flex: none;
       width: 24px;
       height: 24px;
       fill: none;
-      stroke: var(--c-aviso-icono);
+      stroke: var(--c-aviso-texto-2);
       stroke-width: 2;
       stroke-linecap: round;
       stroke-linejoin: round;
     }
-    .tipo {
+    .info {
+      display: flex;
       flex: 1;
+      flex-direction: column;
+      min-width: 0;
+    }
+    .tipo {
       margin: 0;
-      font-size: 1.05rem;
       color: var(--c-aviso-texto);
+      font-size: var(--texto-normal);
+      font-weight: 700;
+      line-height: 1.3;
     }
-    .desde {
-      margin: var(--espacio-1) 0 0;
-      font-weight: var(--peso-medio);
+    .desde,
+    .aclaracion {
+      margin: 0;
+      color: var(--c-aviso-texto-2);
+      font-size: var(--texto-chico);
+      font-weight: 500;
+      font-variant-numeric: tabular-nums;
     }
-    .nota {
-      margin: var(--espacio-1) 0 0;
-      font-style: italic;
-    }
-    .campo-error {
-      margin-top: var(--espacio-2);
+    .error-termino {
+      margin: 4px 0 0;
+      color: var(--c-error-texto);
+      font-size: var(--texto-chico);
+      font-weight: 700;
     }
     .ya-continue {
-      margin-top: var(--espacio-3);
-    }
-    .aclaracion {
-      margin: var(--espacio-2) 0 0;
-      font-size: var(--texto-chico);
+      flex: none;
+      min-height: var(--alto-boton);
+      padding: 0 14px;
+      border: 1.5px solid var(--c-aviso-texto-2);
+      border-radius: var(--radio-boton);
+      background: var(--c-superficie);
       color: var(--c-aviso-texto);
+      font-size: var(--texto-normal);
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .chip {
+      flex: none;
+      white-space: normal;
+      text-align: center;
+    }
+    .nota {
+      font-style: italic;
     }
   `,
 })
@@ -217,11 +235,11 @@ export class IncidenciasAbiertasComponent {
       });
       this.confirmando.set(null);
       this.mensajes.mostrar(
-        this.conexion.enLinea() ? '“Ya continué” guardado. Enviando a la oficina…' : '“Ya continué” guardado en el teléfono. Se enviará solo cuando vuelva la señal.',
+        this.conexion.enLinea() ? '«Ya continué» quedó guardado. Enviando a la oficina…' : TEXTO_GUARDADO_SIN_SENAL,
         'exito',
       );
     } catch {
-      this.mensajes.mostrar('No se pudo guardar el aviso en el teléfono. Intente de nuevo.', 'error', 8000);
+      this.mensajes.mostrar('No se pudo guardar el aviso en el teléfono. Intente de nuevo; si sigue igual, llame a la oficina.', 'error', 8000);
     } finally {
       this.guardando.set(false);
       this.buscandoUbicacion.set(false);

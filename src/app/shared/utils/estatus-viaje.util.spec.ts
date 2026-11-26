@@ -2,7 +2,12 @@ import { salidaEjemplo } from '../../core/api/ejemplo/datos-ejemplo';
 import { EstatusViaje, ReporteOperador, ResultadoReporte, Viaje, ViajeCargado, ViajeVacio } from '../../core/api/operador-api.modelos';
 import {
   avanceViaje,
+  AYUDA_PASO,
+  ayudaPaso,
   BOTON_ESTATUS,
+  desdeEstatus,
+  lineaHitos,
+  posicionPaso,
   ETIQUETA_ESTATUS,
   PASOS_CARGADO,
   ReporteParaGuia,
@@ -42,15 +47,20 @@ describe('estatus-viaje.util: estatus del viaje y pasos del operador', () => {
   it('secuencia del viaje cargado y botones (texto → estatus)', () => {
     expect(PASOS_CARGADO).toEqual(['EnPosicionamiento', 'EnPatioOrigen', 'EnCarga', 'Documentado', 'EnTransito', 'EnPatioDestino', 'EnDescarga', 'Descargado']);
     expect(PASOS_CARGADO.map(textoBoton)).toEqual([
-      'Voy a cargar',
-      'Llegué a cargar',
-      'Me están cargando',
-      'Ya cargué y tengo documentos',
-      'Voy en camino a descargar',
-      'Llegué a descargar',
-      'Me están descargando',
+      'Voy por la carga',
+      'Ya llegué a cargar',
+      'Ya me están cargando',
+      'Ya cargué',
+      'Ya salí',
+      'Ya llegué a descargar',
+      'Ya me están descargando',
       'Ya descargué',
     ]);
+    // Arriba del botón, cuándo tocarlo; cada paso del operador tiene su línea.
+    expect(ayudaPaso('Documentado')).toBe('Toque cuando termine la carga');
+    for (const e of [...PASOS_CARGADO, 'EnTransitoVacio', 'EnPatio', 'EnTaller'] as EstatusViaje[]) expect(AYUDA_PASO[e], e).toMatch(/^Toque /);
+    // El estatus en pantalla conserva su nombre formal.
+    expect(textoEstatus('Documentado')).toBe('Documentado');
     expect(BOTON_ESTATUS.Asignado).toBeUndefined();
     expect(BOTON_ESTATUS.Cerrado).toBeUndefined();
   });
@@ -68,12 +78,12 @@ describe('estatus-viaje.util: estatus del viaje y pasos del operador', () => {
     expect(PASOS_CARGADO.filter(esHito)).toEqual(['Documentado', 'Descargado']);
   });
 
-  it('vacío: "Salí" → EnTransitoVacio; "Llegué" → EnPatio, o EnTaller si el último tramo es a Taller', () => {
+  it('vacío: "Ya salí" → EnTransitoVacio; "Ya llegué" → EnPatio, o EnTaller si el último tramo es a Taller', () => {
     expect(llegadaVacio(combustible)).toBe('EnPatio');
     expect(llegadaVacio(regresoTaller)).toBe('EnTaller');
     expect(pasosOperador(combustible)).toEqual(['EnTransitoVacio', 'EnPatio']);
-    expect(pasosOperador(regresoTaller).map(textoBoton)).toEqual(['Salí', 'Llegué al taller']);
-    expect(textoBoton('EnPatio')).toBe('Llegué');
+    expect(pasosOperador(regresoTaller).map(textoBoton)).toEqual(['Ya salí', 'Ya llegué al taller']);
+    expect(textoBoton('EnPatio')).toBe('Ya llegué');
     // El orden de los tramos manda, no el orden del arreglo.
     expect(llegadaVacio({ ...regresoTaller, tramos: [...regresoTaller.tramos].reverse() })).toBe('EnTaller');
   });
@@ -85,7 +95,7 @@ describe('estatus-viaje.util: estatus del viaje y pasos del operador', () => {
     expect(rango('cargado', 'Cerrado')).toBe(9);
   });
 
-  it('desde Asignado: el siguiente es "Voy a cargar" y se puede saltar a cualquiera hacia adelante', () => {
+  it('desde Asignado: el siguiente es "Voy por la carga" y se puede saltar a cualquiera hacia adelante', () => {
     expect(pasosDisponibles(cargado1, [])).toEqual(PASOS_CARGADO);
   });
 
@@ -207,5 +217,54 @@ describe('estatus-viaje.util: estatus del viaje y pasos del operador', () => {
     expect(avanceViaje({ ...cargado, estatus: 'Cerrado' } as Viaje, [])).toEqual({ total: 8, hechos: 8 });
     expect(avanceViaje({ ...cargado, estatus: 'Cancelado' } as Viaje, [])).toBeNull();
     expect(avanceViaje(s.viajes[0], [])).toEqual({ total: 2, hechos: 0 });
+  });
+
+  it('"Usted está aquí · paso N de M": cuenta todos los estatus del viaje (también Asignado y Cerrado)', () => {
+    expect(posicionPaso(cargado1, [])).toEqual({ n: 1, total: 10 });
+    expect(posicionPaso(con(cargado1, 'EnCarga'), [])).toEqual({ n: 4, total: 10 });
+    expect(posicionPaso(cargado1, [rep(cargado1, 'EnTransito', 'pendiente')])).toEqual({ n: 6, total: 10 });
+    // Vacío con sus propios pasos: Asignado, En tránsito, En patio o En taller, Cerrado.
+    expect(posicionPaso(combustible, [])).toEqual({ n: 1, total: 4 });
+    expect(posicionPaso(con(regresoTaller, 'EnTaller'), [])).toEqual({ n: 3, total: 4 });
+    expect(posicionPaso(con(cargado1, 'Cancelado'), [])).toBeNull();
+  });
+
+  it('línea por hitos: el marcador amarillo va en la posición real, entre hitos o sobre uno', () => {
+    // En carga (paso 4): 3 pasos hechos desde Asignado, falta 1 para Cargado (como en la referencia).
+    const l = lineaHitos(con(cargado1, 'EnCarga'), [])!;
+    expect(l.piezas).toEqual([
+      { tipo: 'punto', pasado: true },
+      { tipo: 'tramo', largo: 3, pasado: true },
+      { tipo: 'marcador' },
+      { tipo: 'tramo', largo: 1, pasado: false },
+      { tipo: 'punto', pasado: false },
+      { tipo: 'tramo', largo: 4, pasado: false },
+      { tipo: 'punto', pasado: false },
+      { tipo: 'tramo', largo: 1, pasado: false },
+      { tipo: 'punto', pasado: false },
+    ]);
+    expect(l.etiquetas).toEqual([
+      { texto: 'Asignado', pasado: true },
+      { texto: 'Cargado', pasado: false },
+      { texto: 'Descargado', pasado: false },
+      { texto: 'Cerrado', pasado: false },
+    ]);
+    // Justo en un hito: el marcador reemplaza su punto.
+    const enHito = lineaHitos(con(cargado1, 'Documentado'), [])!;
+    expect(enHito.piezas.filter((p) => p.tipo === 'marcador')).toHaveLength(1);
+    expect(enHito.piezas[2]).toEqual({ tipo: 'marcador' });
+    expect(enHito.piezas[1]).toEqual({ tipo: 'tramo', largo: 4, pasado: true });
+    // Vacío: sus cuatro hitos; recién asignado, el marcador en el primero.
+    const vacio = lineaHitos(regresoTaller, [])!;
+    expect(vacio.etiquetas.map((e) => e.texto)).toEqual(['Asignado', 'En tránsito', 'En taller', 'Cerrado']);
+    expect(vacio.piezas[0]).toEqual({ tipo: 'marcador' });
+    expect(lineaHitos(con(cargado1, 'Cancelado'), [])).toBeNull();
+  });
+
+  it('"desde": hora del reporte que el servidor aún no refleja, o la del último evento de ese estatus', () => {
+    expect(desdeEstatus(cargado1, [])).toBe(cargado1.historial[0].ocurrioEn);
+    const r = rep(cargado1, 'EnCarga', 'pendiente');
+    expect(desdeEstatus(cargado1, [r])).toBe((r.reporte as ReporteOperador).ocurrioEn);
+    expect(desdeEstatus(con(cargado1, 'EnTransito'), [])).toBeNull();
   });
 });

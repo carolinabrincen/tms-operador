@@ -12,7 +12,7 @@ import { PIN_LARGO, PIN_MAX, mensajeCelular, mensajePin } from '../../shared/uti
 const MENSAJE_ERROR: Record<TipoErrorApi, string> = {
   sesion: 'Celular o PIN incorrectos. Revise y vuelva a intentar. Si no tiene PIN, pídalo a la oficina.',
   limite: 'Demasiados intentos. Por seguridad, espere 15 minutos y vuelva a intentar.',
-  'sin-conexion': 'Sin conexión. Para entrar necesita señal de internet.',
+  'sin-conexion': 'Sin señal. Para entrar necesita internet: intente donde tenga señal.',
   servidor: 'La oficina no responde en este momento. Intente de nuevo en un rato.',
   rechazado: 'No se pudo entrar. Llame a la oficina.',
   'id-duplicado': 'No se pudo entrar. Llame a la oficina.',
@@ -26,7 +26,10 @@ const MENSAJE_ERROR: Record<TipoErrorApi, string> = {
   styles: `
     .tarjeta-acceso {
       margin-top: var(--espacio-2);
-      padding: var(--espacio-5);
+      padding: var(--espacio-5) var(--espacio-4);
+    }
+    .entrar {
+      margin-top: var(--espacio-2);
     }
     .tarjeta-acceso h2 {
       margin-top: 0;

@@ -1,10 +1,10 @@
-<app-encabezado titulo="Mis reportes" volver="/viaje" />
+<app-encabezado titulo="Reportes" />
 
 <main class="pagina">
 
   @if (!cola.persistente()) {
     <p class="alerta alerta-aviso">
-      Este navegador no guarda los reportes si se cierra (¿modo privado?). No cierre la aplicación hasta que estén enviados.
+      Este navegador no guarda los reportes si se cierra (¿modo privado?). No cierre la app hasta que estén enviados.
     </p>
   }
 
@@ -12,7 +12,7 @@
     <section class="tarjeta tarjeta-destacada">
       <h2>{{ textoPendientes(cola.pendientes()) }}</h2>
       <p>
-        Están guardados en su teléfono y se envían solos cuando hay señal.
+        Quedaron guardados en su teléfono y se envían solos cuando hay señal.
         @if (cola.proximoReintento(); as p) {
           Próximo intento: {{ hora(p) }}.
         }
@@ -26,10 +26,10 @@
   <ul class="leyenda" aria-label="Qué significa cada estado">
     <li><span class="chip chip-pendiente">Pendiente de enviar</span> guardado en el teléfono</li>
     <li><span class="chip chip-enviado">Enviado</span> la oficina lo recibió (avances e incidencias)</li>
-    <li><span class="chip chip-por-confirmar">Pendiente de confirmar por oficina</span> “Ya cargué…” o “Ya descargué”</li>
+    <li><span class="chip chip-por-confirmar">Pendiente de confirmar por oficina</span> «Ya cargué» o «Ya descargué»</li>
     <li><span class="chip chip-confirmado">Confirmado</span> la oficina confirmó</li>
     <li><span class="chip chip-descartado">Descartado por oficina</span> la oficina lo descartó (verá el motivo)</li>
-    <li><span class="chip chip-rechazado">No aceptado</span> avise a la oficina</li>
+    <li><span class="chip chip-rechazado">No aceptado</span> la oficina no lo recibió: llame a la oficina</li>
   </ul>
 
   @for (r of cola.reportes(); track r.id) {

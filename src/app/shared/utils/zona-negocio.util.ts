@@ -58,22 +58,40 @@ function partes(iso: string | null | undefined, zona: string): Partes | null {
   return ms == null ? null : partesEnZona(ms, zona);
 }
 
-/** ISO UTC → "23/11/2026" (día del negocio); '' si no hay o es inválido. */
-export function fechaNegocio(iso: string | null | undefined, zona = ZONA_NEGOCIO): string {
-  const p = partes(iso, zona);
-  return p ? `${dos(p.d)}/${dos(p.m)}/${p.y}` : '';
+/** Meses abreviados como se leen en México ("25 nov"). */
+export const MESES_CORTOS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'] as const;
+
+/** Espacio de no separación: "1:26 p. m." nunca se parte en dos renglones. */
+export const NBSP = '\u00a0';
+
+/** "1:26 p. m.", "12:05 a. m." (12 horas, como se dice en México), con espacios de no separación. */
+function hora12(p: Partes): string {
+  const h = p.h % 12 === 0 ? 12 : p.h % 12;
+  return `${h}:${dos(p.mi)}${NBSP}${p.h < 12 ? 'a.' : 'p.'}${NBSP}m.`;
 }
 
-/** ISO UTC → "14:05" (hora del negocio, 24 h); '' si no hay o es inválido. */
+/** "25 nov"; con el año solo si no es el año en curso del negocio ("25 nov 2027"). */
+function fechaCorta(p: Partes, ahora: Date, zona: string): string {
+  const anio = partesEnZona(ahora.getTime(), zona).y;
+  return `${p.d} ${MESES_CORTOS[p.m - 1]}${p.y === anio ? '' : ` ${p.y}`}`;
+}
+
+/** ISO UTC → "25 nov" (día del negocio; el año solo si no es el actual); '' si no hay o es inválido. */
+export function fechaNegocio(iso: string | null | undefined, zona = ZONA_NEGOCIO, ahora: Date = new Date()): string {
+  const p = partes(iso, zona);
+  return p ? fechaCorta(p, ahora, zona) : '';
+}
+
+/** ISO UTC → "1:26 p. m." (hora del negocio, 12 horas); '' si no hay o es inválido. */
 export function horaNegocio(iso: string | null | undefined, zona = ZONA_NEGOCIO): string {
   const p = partes(iso, zona);
-  return p ? `${dos(p.h)}:${dos(p.mi)}` : '';
+  return p ? hora12(p) : '';
 }
 
-/** ISO UTC → "23/11/2026 14:05" con la hora del negocio; '' si no hay o es inválido. */
-export function fechaHoraNegocio(iso: string | null | undefined, zona = ZONA_NEGOCIO): string {
+/** ISO UTC → "29 nov, 1:26 p. m." con la hora del negocio; '' si no hay o es inválido. */
+export function fechaHoraNegocio(iso: string | null | undefined, zona = ZONA_NEGOCIO, ahora: Date = new Date()): string {
   const p = partes(iso, zona);
-  return p ? `${dos(p.d)}/${dos(p.m)}/${p.y} ${dos(p.h)}:${dos(p.mi)}` : '';
+  return p ? `${fechaCorta(p, ahora, zona)}, ${hora12(p)}` : '';
 }
 
 /** ISO UTC → "2026-11-23" (clave del día del negocio, para agrupar o comparar); '' si no hay o es inválido. */
@@ -83,8 +101,8 @@ export function diaNegocio(iso: string | null | undefined, zona = ZONA_NEGOCIO):
 }
 
 /**
- * Texto corto para una cita o un reporte: "Hoy 14:05", "Mañana 07:00", "Ayer 22:10" o "25/11/2026 09:30", comparando
- * días del negocio (no del teléfono). '' si no hay o es inválido.
+ * Texto corto para una cita o un reporte: "Hoy 2:05 p. m.", "Mañana 7:00 a. m.", "Ayer 10:10 p. m." o
+ * "25 nov, 9:30 a. m.", comparando días del negocio (no del teléfono). '' si no hay o es inválido.
  */
 export function cuandoNegocio(iso: string | null | undefined, ahora: Date = new Date(), zona = ZONA_NEGOCIO): string {
   const dia = diaNegocio(iso, zona);
@@ -99,7 +117,7 @@ export function cuandoNegocio(iso: string | null | undefined, ahora: Date = new 
   const mediodia = Date.UTC(y, m - 1, d, 12);
   if (dia === diaNegocio(new Date(mediodia + unDia).toISOString(), 'UTC')) return `Mañana ${hora}`;
   if (dia === diaNegocio(new Date(mediodia - unDia).toISOString(), 'UTC')) return `Ayer ${hora}`;
-  return fechaHoraNegocio(iso, zona);
+  return fechaHoraNegocio(iso, zona, ahora);
 }
 
 /** Ahora como ISO UTC sin milisegundos ("2026-11-23T20:05:37Z"): así se registra la hora de un reporte. */

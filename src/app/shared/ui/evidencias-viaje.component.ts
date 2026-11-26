@@ -100,10 +100,10 @@ interface FotoVista {
     }
     .galeria-item h4 {
       margin: 0;
-      font-size: 1.05rem;
+      font-size: var(--texto-dato);
     }
     .foto-oficina {
-      font-weight: var(--peso-medio);
+      font-weight: 600;
       margin: 6px 0 0;
     }
     .foto-servidor {

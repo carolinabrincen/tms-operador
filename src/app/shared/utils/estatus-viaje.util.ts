@@ -46,20 +46,39 @@ export function textoMotivo(m: MotivoTramoVacio): string {
   return ETIQUETA_MOTIVO[m] ?? m;
 }
 
-/** Texto del botón que pone cada estatus (lo que el operador "dice"). */
+/** Texto del botón que pone cada estatus, en palabras del operador. El estatus en pantalla conserva su nombre formal. */
 export const BOTON_ESTATUS: Readonly<Partial<Record<EstatusViaje, string>>> = {
-  EnPosicionamiento: 'Voy a cargar',
-  EnPatioOrigen: 'Llegué a cargar',
-  EnCarga: 'Me están cargando',
-  Documentado: 'Ya cargué y tengo documentos',
-  EnTransito: 'Voy en camino a descargar',
-  EnPatioDestino: 'Llegué a descargar',
-  EnDescarga: 'Me están descargando',
+  EnPosicionamiento: 'Voy por la carga',
+  EnPatioOrigen: 'Ya llegué a cargar',
+  EnCarga: 'Ya me están cargando',
+  Documentado: 'Ya cargué',
+  EnTransito: 'Ya salí',
+  EnPatioDestino: 'Ya llegué a descargar',
+  EnDescarga: 'Ya me están descargando',
   Descargado: 'Ya descargué',
-  EnTransitoVacio: 'Salí',
-  EnPatio: 'Llegué',
-  EnTaller: 'Llegué al taller',
+  EnTransitoVacio: 'Ya salí',
+  EnPatio: 'Ya llegué',
+  EnTaller: 'Ya llegué al taller',
 };
+
+/** Línea de ayuda arriba del botón principal: cuándo tocarlo. */
+export const AYUDA_PASO: Readonly<Partial<Record<EstatusViaje, string>>> = {
+  EnPosicionamiento: 'Toque al salir hacia la carga',
+  EnPatioOrigen: 'Toque al llegar al lugar de carga',
+  EnCarga: 'Toque cuando empiecen a cargar',
+  Documentado: 'Toque cuando termine la carga',
+  EnTransito: 'Toque al salir hacia la descarga',
+  EnPatioDestino: 'Toque al llegar al lugar de descarga',
+  EnDescarga: 'Toque cuando empiecen a descargar',
+  Descargado: 'Toque cuando terminen de descargar',
+  EnTransitoVacio: 'Toque al salir',
+  EnPatio: 'Toque al llegar al patio',
+  EnTaller: 'Toque al llegar al taller',
+};
+
+export function ayudaPaso(e: EstatusViaje): string {
+  return AYUDA_PASO[e] ?? 'Toque cuando suceda';
+}
 
 /** Cómo se ve un estatus: texto y colores (fondo y letra). */
 export interface PresentacionEstatus {
@@ -269,4 +288,82 @@ export function avanceViaje(v: Viaje, reportes: readonly ReporteParaGuia[]): Ava
   if (v.estatus === 'Cerrado') return { total: pasos.length, hechos: pasos.length };
   const actual = rango(v.tipo, guia(v, reportes).estatus);
   return { total: pasos.length, hechos: pasos.filter((e) => rango(v.tipo, e) <= actual).length };
+}
+
+// ---------------------------------------------------------------- Paso actual ("Usted está aquí")
+
+/** Todos los estatus del viaje, en orden, incluidos los que pone la oficina (Asignado y Cerrado). */
+export function pasosDelViaje(v: Viaje): readonly EstatusViaje[] {
+  return v.tipo === 'cargado' ? ESTATUS_CARGADO : ['Asignado', 'EnTransitoVacio', llegadaVacio(v), 'Cerrado'];
+}
+
+/** "paso 4 de 10": en qué estatus va (el efectivo) dentro de todos los del viaje. null si está cancelado. */
+export function posicionPaso(v: Viaje, reportes: readonly ReporteParaGuia[]): { n: number; total: number } | null {
+  if (v.estatus === 'Cancelado') return null;
+  const pasos = pasosDelViaje(v);
+  const k = rango(v.tipo, guia(v, reportes).estatus);
+  return k < 0 ? null : { n: Math.min(k, pasos.length - 1) + 1, total: pasos.length };
+}
+
+/** Hitos que se dibujan en la línea de avance, con su nombre corto. */
+function hitosDeLinea(v: Viaje): { estatus: EstatusViaje; texto: string }[] {
+  if (v.tipo === 'cargado') {
+    return [
+      { estatus: 'Asignado', texto: 'Asignado' },
+      { estatus: 'Documentado', texto: 'Cargado' },
+      { estatus: 'Descargado', texto: 'Descargado' },
+      { estatus: 'Cerrado', texto: 'Cerrado' },
+    ];
+  }
+  const llegada = llegadaVacio(v);
+  return [
+    { estatus: 'Asignado', texto: 'Asignado' },
+    { estatus: 'EnTransitoVacio', texto: 'En tránsito' },
+    { estatus: llegada, texto: llegada === 'EnTaller' ? 'En taller' : 'En patio' },
+    { estatus: 'Cerrado', texto: 'Cerrado' },
+  ];
+}
+
+/**
+ * Pieza de la línea de avance: punto de un hito, tramo entre dos (su `largo` en pasos, para el ancho) o el marcador
+ * amarillo de "usted está aquí", en la posición real (dentro de un tramo, o sobre el hito si va justo en él).
+ */
+export type PiezaLinea = { tipo: 'punto'; pasado: boolean } | { tipo: 'tramo'; largo: number; pasado: boolean } | { tipo: 'marcador' };
+
+export interface LineaHitos {
+  piezas: PiezaLinea[];
+  etiquetas: { texto: string; pasado: boolean }[];
+}
+
+/** Línea de avance por hitos con el marcador en la posición real. null si el viaje está cancelado. */
+export function lineaHitos(v: Viaje, reportes: readonly ReporteParaGuia[]): LineaHitos | null {
+  if (v.estatus === 'Cancelado') return null;
+  const actual = rango(v.tipo, guia(v, reportes).estatus);
+  const hitos = hitosDeLinea(v).map((h) => ({ ...h, k: rango(v.tipo, h.estatus) }));
+  const piezas: PiezaLinea[] = [];
+  hitos.forEach((h, i) => {
+    piezas.push(h.k === actual ? { tipo: 'marcador' } : { tipo: 'punto', pasado: h.k < actual });
+    const sig = hitos[i + 1];
+    if (!sig) return;
+    if (h.k < actual && actual < sig.k) {
+      piezas.push({ tipo: 'tramo', largo: actual - h.k, pasado: true }, { tipo: 'marcador' }, { tipo: 'tramo', largo: sig.k - actual, pasado: false });
+    } else {
+      piezas.push({ tipo: 'tramo', largo: sig.k - h.k, pasado: sig.k <= actual });
+    }
+  });
+  return { piezas, etiquetas: hitos.map((h) => ({ texto: h.texto, pasado: h.k <= actual })) };
+}
+
+/**
+ * Desde cuándo está en el estatus efectivo: la hora del reporte del operador si aún no lo refleja el servidor; si no,
+ * la del último evento de ese estatus en el historial. null si no se sabe.
+ */
+export function desdeEstatus(v: Viaje, reportes: readonly ReporteParaGuia[]): string | null {
+  const g = guia(v, reportes);
+  if (g.porReporte) {
+    const r = reportes.find((x) => x.reporte.tipo === 'estatus' && x.reporte.viajeId === v.id && x.reporte.estatus === g.estatus && cuentaComoHecho(x));
+    if (r && r.reporte.tipo === 'estatus') return r.reporte.ocurrioEn;
+  }
+  const ev = [...v.historial].reverse().find((e) => e.tipo === 'estatus' && e.estatus === g.estatus);
+  return ev?.ocurrioEn ?? null;
 }

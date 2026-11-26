@@ -13,14 +13,14 @@ const toneladas = new Intl.NumberFormat('es-MX', { maximumFractionDigits: 2 });
     @let v = viaje();
     <dl class="datos">
       @if (v.tipo === 'cargado') {
+        <div><dt>Cliente</dt><dd>{{ v.cliente }}</dd></div>
         @if (!omitirTrayecto()) {
-          <div><dt>Cliente</dt><dd>{{ v.cliente }}</dd></div>
           <div><dt>Origen</dt><dd>{{ v.origen }}</dd></div>
           <div><dt>Destino</dt><dd>{{ v.destino }}</dd></div>
           <div><dt>Cita de carga</dt><dd [title]="fechaHora(v.citaCarga)">{{ cuando(v.citaCarga) || 'Sin cita' }}</dd></div>
           <div><dt>Cita de descarga</dt><dd [title]="fechaHora(v.citaDescarga)">{{ cuando(v.citaDescarga) || 'Sin cita' }}</dd></div>
-          <div><dt>Producto</dt><dd>{{ v.producto }}</dd></div>
         }
+        <div><dt>Producto</dt><dd>{{ v.producto }}</dd></div>
         <div><dt>Toneladas programadas</dt><dd>{{ tons() }}</dd></div>
         <div><dt>Referencia</dt><dd>{{ v.referencia || 'Sin referencia' }}</dd></div>
       } @else {
@@ -40,7 +40,7 @@ const toneladas = new Intl.NumberFormat('es-MX', { maximumFractionDigits: 2 });
 })
 export class DatosViajeComponent {
   readonly viaje = input.required<Viaje>();
-  /** true = cliente, origen, destino, citas y producto ya se ven en la tarjeta de trayecto: no se repiten. */
+  /** true = origen, destino y citas ya se ven en la tarjeta de trayecto: no se repiten. */
   readonly omitirTrayecto = input(false);
   protected readonly cuando = (iso: string | null) => cuandoNegocio(iso);
   protected readonly fechaHora = fechaHoraNegocio;
