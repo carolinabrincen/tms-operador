@@ -8,7 +8,7 @@
  */
 import { ahoraIsoUtc, diaNegocio } from '../../../shared/utils/zona-negocio.util';
 import { EvidenciaViaje, HojaRuta } from '../operador-api-m2.modelos';
-import { IsoUtc, Salida, Unidad } from '../operador-api.modelos';
+import { IncidenciaAbierta, IsoUtc, Salida, Unidad } from '../operador-api.modelos';
 
 /** Desfase del centro de México (sin horario de verano desde 2022). */
 const DESFASE_NEGOCIO = '-06:00';
@@ -43,6 +43,8 @@ export function salidaEjemplo(ahora: Date): Salida {
     folio: 'SAL-2026-00418',
     unidad: UNIDAD,
     notas: 'Revise presión de llantas antes de salir. Cualquier retraso, avise a tráfico.',
+    // Las abiertas las calcula la "oficina" de ejemplo (ver incidenciaOficinaEjemplo).
+    incidenciasAbiertas: [],
     viajes: [
       {
         tipo: 'vacio',
@@ -102,6 +104,22 @@ export function salidaEjemplo(ahora: Date): Salida {
         ],
       },
     ],
+  };
+}
+
+/**
+ * Incidencia que registró la OFICINA en el viaje 1 (vacío), 40 minutos antes, y sigue abierta: sirve para ver la tarjeta
+ * ámbar y "Ya continué". Si el operador reporta un paso de ese viaje, el servidor (y el ejemplo) la termina sola.
+ */
+export function incidenciaOficinaEjemplo(ahora: Date): { viajeId: string; info: IncidenciaAbierta } {
+  return {
+    viajeId: 'ej-via-770',
+    info: {
+      id: 'ej-inc-oficina-1',
+      tipo: 'RetenOInspeccion',
+      ocurrioEn: ahoraIsoUtc(new Date(ahora.getTime() - 40 * 60 * 1000)),
+      nota: 'Revisión de documentos a la salida del patio',
+    },
   };
 }
 

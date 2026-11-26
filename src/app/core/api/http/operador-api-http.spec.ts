@@ -522,4 +522,50 @@ describe('OperadorApiHttp: la API real según el contrato M1', () => {
     (await pedido('GET', 'evidencias/x/archivo')).flush(new Blob([]), { status: 500, statusText: 'Error' });
     expect((await errorDe(p2)).tipo).toBe('servidor');
   });
+
+  // ------------------------------------------------------------------ terminar una incidencia (sección 7)
+
+  const TERMINO = { tipo: 'termino' as const, id: 'ter-1', incidenciaId: 'inc-1', terminadaEn: '2026-11-24T15:40:00Z', ubicacion: null, nota: 'Ya pasé el retén' };
+
+  it('"Ya continué": POST incidencias/terminar con el token y el cuerpo del contrato', async () => {
+    await almacen.guardar(CRED_1);
+    const p = api.terminarIncidencia(TERMINO);
+    const req = await pedido('POST', 'incidencias/terminar');
+    expect(req.request.headers.get('Authorization')).toBe('Bearer token-1');
+    expect(req.request.body).toEqual({ id: 'ter-1', incidenciaId: 'inc-1', terminadaEn: '2026-11-24T15:40:00Z', ubicacion: null, nota: 'Ya pasé el retén' });
+    req.flush({ id: 'ter-1', incidenciaId: 'inc-1', recibidoEn: '2026-11-24T15:40:03Z', terminadaEn: '2026-11-24T15:40:00Z', resultado: 'terminada', mensaje: null });
+    expect(await p).toMatchObject({ resultado: 'terminada', mensaje: null });
+  });
+
+  it('"Ya continué" sobre una ya terminada: 200 ya-terminada (no es error)', async () => {
+    await almacen.guardar(CRED_1);
+    const p = api.terminarIncidencia(TERMINO);
+    (await pedido('POST', 'incidencias/terminar')).flush({
+      id: 'ter-1',
+      incidenciaId: 'inc-1',
+      recibidoEn: 't',
+      terminadaEn: '2026-11-24T15:30:00Z',
+      resultado: 'ya-terminada',
+      mensaje: 'La incidencia Retén o inspección ya había terminado al registrarse un estatus.',
+    });
+    expect(await p).toMatchObject({ resultado: 'ya-terminada', terminadaEn: '2026-11-24T15:30:00Z' });
+  });
+
+  for (const [status, codigo, tipo] of [
+    [400, 'OPERADOR_REPORTE_INVALIDO', 'rechazado'],
+    [400, 'DESPACHO_EVENTO_INVALIDO', 'rechazado'],
+    [400, 'DESPACHO_EVENTO_HORA_INVALIDA', 'rechazado'],
+    [404, 'OPERADOR_INCIDENCIA_NO_ENCONTRADA', 'rechazado'],
+    [409, 'OPERADOR_SALIDA_CERRADA', 'rechazado'],
+    [409, 'DESPACHO_EVENTO_CLAVE_DUPLICADA', 'id-duplicado'],
+    [429, undefined, 'limite'],
+    [503, 'CUENTA_ESQUEMA_DESACTUALIZADO', 'servidor'],
+  ] as const) {
+    it(`"Ya continué": ${status} ${codigo ?? ''} → ${tipo}`, async () => {
+      await almacen.guardar(CRED_1);
+      const p = api.terminarIncidencia(TERMINO);
+      falla(await pedido('POST', 'incidencias/terminar'), status, codigo);
+      expect(await errorDe(p)).toMatchObject({ tipo, codigo: codigo ?? null, status });
+    });
+  }
 });

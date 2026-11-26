@@ -229,7 +229,7 @@ export interface ReporteParaSugerencia {
   estado: string;
   resultado?: string | null;
   creadoEn: string;
-  reporte: { tipo: string; viajeId: string; estatus?: string };
+  reporte: { tipo: string; viajeId?: string; estatus?: string };
 }
 
 export interface SugerenciaAcuse {

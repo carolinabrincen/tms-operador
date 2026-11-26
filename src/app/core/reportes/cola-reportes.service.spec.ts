@@ -312,4 +312,109 @@ describe('ColaReportesService: guardar primero, enviar después, reintentar sin 
     expect(cola.reportes()).toHaveLength(1);
     expect(await enDisco()).toHaveLength(1);
   });
+
+  describe('"Ya continué" (término de incidencia) en la misma cola', () => {
+    const INC = 'ej-inc-oficina-1';
+    const termino = (nota = '  Ya salí  '): NuevoReporte => ({
+      tipo: 'termino',
+      incidenciaId: INC,
+      terminadaEn: '2026-11-23T16:00:00Z',
+      ubicacion: { lat: 25.68, lng: -100.31, precisionM: 10, tomadoEn: '2026-11-23T16:00:00Z' },
+      nota,
+      resumen: 'Retén o inspección, desde las 09:20',
+    });
+    const abiertas = async () => (await api.obtenerAsignacion()).salida!.incidenciasAbiertas.map((i) => i.id);
+
+    it('se guarda primero con su propio id, se envía y queda "Enviado" (terminada); la incidencia sale de abiertas', async () => {
+      expect(await abiertas()).toEqual([INC]);
+      const r = await cola.registrar(termino());
+      expect(r.id).toMatch(FORMATO_UUID_V4);
+      expect(r.reporte).toMatchObject({ tipo: 'termino', incidenciaId: INC, nota: 'Ya salí' });
+      expect((await enDisco())[0].id).toBe(r.id);
+      await cola.inactivo();
+      expect(cola.reportes()[0]).toMatchObject({ estado: 'enviado', resultado: 'terminada', error: null });
+      expect(await abiertas()).toEqual([]);
+    });
+
+    it('sin señal: queda pendiente en el teléfono y se envía solo al volver la señal', async () => {
+      ponerEnLinea(e, false);
+      await cola.registrar(termino());
+      await cola.inactivo();
+      expect(cola.pendientes()).toBe(1);
+      expect((await enDisco())[0]).toMatchObject({ estado: 'pendiente' });
+      ponerEnLinea(e, true);
+      await vi.waitFor(() => expect(cola.reportes()[0].estado).toBe('enviado'));
+      expect(await abiertas()).toEqual([]);
+    });
+
+    it('respuesta perdida: se reenvía con el MISMO id y no duplica (mismo acuse)', async () => {
+      const terminar = vi.spyOn(api, 'terminarIncidencia');
+      terminar.mockImplementationOnce(async (t) => {
+        await OperadorApiEjemplo.prototype.terminarIncidencia.call(api, t); // llega al servidor…
+        throw new ErrorApiOperador('sin-conexion', 'Sin conexión.'); // …pero la respuesta se pierde
+      });
+      const r = await cola.registrar(termino());
+      await cola.inactivo();
+      expect(cola.reportes()[0].estado).toBe('pendiente');
+      await cola.procesar();
+      expect(terminar.mock.calls.map((c) => c[0].id)).toEqual([r.id, r.id]);
+      expect(cola.reportes()[0]).toMatchObject({ estado: 'enviado', resultado: 'terminada' }); // el mismo acuse, no "ya terminada"
+    });
+
+    it('falla del servidor: sigue pendiente, agenda reintento y al cumplirse la espera se envía', async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      try {
+        vi.spyOn(api, 'terminarIncidencia').mockRejectedValueOnce(new ErrorApiOperador('servidor', 'La oficina no responde en este momento.', null, 500));
+        await cola.registrar(termino());
+        await cola.inactivo();
+        expect(cola.reportes()[0]).toMatchObject({ estado: 'pendiente', error: 'La oficina no responde en este momento.' });
+        expect(cola.proximoReintento()).not.toBeNull();
+        await vi.advanceTimersByTimeAsync(5000);
+        vi.useRealTimers();
+        await vi.waitFor(() => expect(cola.reportes()[0].estado).toBe('enviado'));
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('si ya había terminado (aquí, la oficina): se toma como hecho, sin error, con el mensaje del servidor', async () => {
+      await api.obtenerAsignacion();
+      api.terminarIncidenciaPorOficina('ej-op-8112345678', INC);
+      await cola.registrar(termino());
+      await cola.inactivo();
+      expect(cola.reportes()[0]).toMatchObject({
+        estado: 'enviado',
+        resultado: 'ya-terminada',
+        error: null,
+        mensaje: 'La oficina ya había terminado la incidencia Retén o inspección.',
+      });
+    });
+
+    it('no aceptado: un texto de usted por código; la hora inválida no culpa al reloj del teléfono', async () => {
+      vi.spyOn(api, 'terminarIncidencia').mockRejectedValueOnce(new ErrorApiOperador('rechazado', 'x', 'DESPACHO_EVENTO_HORA_INVALIDA', 400));
+      await cola.registrar(termino());
+      await cola.inactivo();
+      expect(cola.reportes()[0]).toMatchObject({
+        estado: 'rechazado',
+        error: 'La hora de término no es válida: no puede ser antes de la incidencia ni estar adelantada. Revise la hora de su teléfono.',
+      });
+      expect(TestBed.inject(RelojTelefonoService).aviso()).toBeNull();
+    });
+
+    it('409 DESPACHO_EVENTO_CLAVE_DUPLICADA: el mismo término con otro id, y se reenvía solo', async () => {
+      vi.spyOn(api, 'terminarIncidencia').mockRejectedValueOnce(new ErrorApiOperador('id-duplicado', 'x', 'DESPACHO_EVENTO_CLAVE_DUPLICADA', 409));
+      const r = await cola.registrar(termino());
+      await vi.waitFor(() => expect(cola.reportes()[0]?.estado).toBe('enviado'));
+      expect(cola.reportes()).toHaveLength(1);
+      expect(cola.reportes()[0].id).not.toBe(r.id);
+    });
+
+    it('su acuse es definitivo: "Actualizar estados" no lo consulta', async () => {
+      await cola.registrar(termino());
+      await cola.inactivo();
+      const consulta = vi.spyOn(api, 'consultarReportes');
+      await cola.actualizarEstados();
+      expect(consulta).not.toHaveBeenCalled();
+    });
+  });
 });

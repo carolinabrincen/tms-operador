@@ -7,7 +7,15 @@
  * con otro id). Un reporte nace "pendiente" y se guarda ANTES de intentar enviarlo; si falla por conexión o por el
  * servidor sigue pendiente y se reintenta; si el servidor lo rechaza no se reintenta.
  */
-import { AcuseReporte, EstadoRemotoReporte, IsoUtc, ReporteOperador, ResultadoReporte } from '../../core/api/operador-api.modelos';
+import {
+  AcuseReporte,
+  AcuseTerminoIncidencia,
+  EnvioOperador,
+  EstadoRemotoReporte,
+  IsoUtc,
+  ResultadoReporte,
+  ResultadoTermino,
+} from '../../core/api/operador-api.modelos';
 import { TipoErrorApi } from '../../core/api/operador-api';
 import { EstadoReporteLocal, ReporteLocal } from '../../core/reportes/reporte-local';
 
@@ -21,13 +29,16 @@ export const ETIQUETA_ESTADO_REPORTE: Readonly<Record<EstadoReporteLocal, string
 };
 
 /** Qué estado local corresponde a lo que respondió el servidor. */
-export const ESTADO_POR_RESULTADO: Readonly<Record<ResultadoReporte, EstadoReporteLocal>> = {
+export const ESTADO_POR_RESULTADO: Readonly<Record<ResultadoReporte | ResultadoTermino, EstadoReporteLocal>> = {
   aplicado: 'enviado',
   registrado: 'enviado',
   'sin-efecto': 'enviado',
   'por-confirmar': 'por-confirmar',
   confirmado: 'confirmado',
   descartado: 'descartado',
+  // "Ya continué": terminada o ya terminada, las dos cuentan como hecho (sin error).
+  terminada: 'enviado',
+  'ya-terminada': 'enviado',
 };
 
 /** Esperas entre reintentos cuando el servidor falla (s): 5, 15, 30, 60 y luego cada 2 min. */
@@ -38,7 +49,12 @@ export function retrasoReintentoMs(intentos: number): number {
   return ESPERAS_S[i] * 1000;
 }
 
-export function crearReporteLocal(reporte: ReporteOperador, operadorId: string, resumen: string, ahora: IsoUtc): ReporteLocal {
+/** Hora del hecho de un envío: la del reporte o, en un término, la hora en que terminó la incidencia. */
+export function horaDelEnvio(e: EnvioOperador): IsoUtc {
+  return e.tipo === 'termino' ? e.terminadaEn : e.ocurrioEn;
+}
+
+export function crearReporteLocal(reporte: EnvioOperador, operadorId: string, resumen: string, ahora: IsoUtc): ReporteLocal {
   return {
     id: reporte.id,
     operadorId,
@@ -57,7 +73,7 @@ export function crearReporteLocal(reporte: ReporteOperador, operadorId: string, 
 }
 
 /** ¿Este reporte cuenta como algo que el operador ya hizo? No: rechazados, descartados ni recibidos sin efecto. */
-export function cuentaComoHecho(r: { estado: string; resultado?: ResultadoReporte | null }): boolean {
+export function cuentaComoHecho(r: { estado: string; resultado?: ResultadoReporte | ResultadoTermino | null }): boolean {
   return r.estado !== 'rechazado' && r.estado !== 'descartado' && r.resultado !== 'sin-efecto';
 }
 
@@ -86,6 +102,7 @@ export function porConsultar(
     .filter(
       (r) =>
         r.operadorId === operadorId &&
+        r.reporte.tipo !== 'termino' && // el acuse de un término es definitivo (no hay estado que consultar)
         r.resultado !== 'sin-efecto' &&
         (r.estado === 'enviado' || r.estado === 'por-confirmar' || (r.estado === 'confirmado' && viajesActivos.has(r.reporte.viajeId))),
     )
@@ -93,7 +110,7 @@ export function porConsultar(
     .slice(0, max);
 }
 
-function conResultado(r: ReporteLocal, resultado: ResultadoReporte, mensaje: string | null, confirmadoEn: IsoUtc | null, ahora: IsoUtc): ReporteLocal {
+function conResultado(r: ReporteLocal, resultado: ResultadoReporte | ResultadoTermino, mensaje: string | null, confirmadoEn: IsoUtc | null, ahora: IsoUtc): ReporteLocal {
   const estado = ESTADO_POR_RESULTADO[resultado];
   return {
     ...r,
@@ -105,7 +122,7 @@ function conResultado(r: ReporteLocal, resultado: ResultadoReporte, mensaje: str
   };
 }
 
-export function conEnvioExitoso(r: ReporteLocal, acuse: AcuseReporte, ahora: IsoUtc): ReporteLocal {
+export function conEnvioExitoso(r: ReporteLocal, acuse: AcuseReporte | AcuseTerminoIncidencia, ahora: IsoUtc): ReporteLocal {
   return {
     ...conResultado(r, acuse.resultado, acuse.mensaje, null, ahora),
     intentos: r.intentos + 1,
@@ -140,7 +157,7 @@ export function conEstadoRemoto(r: ReporteLocal, remoto: EstadoRemotoReporte, ah
 
 /** Lo más reciente primero (por hora del reporte). */
 export function ordenarRecientes(reportes: readonly ReporteLocal[]): ReporteLocal[] {
-  return [...reportes].sort((a, b) => b.reporte.ocurrioEn.localeCompare(a.reporte.ocurrioEn) || b.creadoEn.localeCompare(a.creadoEn));
+  return [...reportes].sort((a, b) => horaDelEnvio(b.reporte).localeCompare(horaDelEnvio(a.reporte)) || b.creadoEn.localeCompare(a.creadoEn));
 }
 
 /** "Falta enviar 1 reporte" / "Faltan enviar 3 reportes". */
@@ -163,6 +180,11 @@ const INCIDENCIA_ANTERIOR: Readonly<Record<string, string>> = {
 export function normalizarReporteLocal(x: unknown): ReporteLocal | null {
   const r = x as (ReporteLocal & { aviso?: string | null }) | null;
   if (!r || typeof r.id !== 'string' || typeof r.operadorId !== 'string' || !r.reporte) return null;
+  if (r.reporte.tipo === 'termino') {
+    const t = r.reporte;
+    if (typeof t.incidenciaId !== 'string' || typeof t.terminadaEn !== 'string') return null;
+    return { ...r, resultado: r.resultado ?? null, mensaje: r.mensaje ?? null };
+  }
   if (r.reporte.tipo !== 'estatus' && r.reporte.tipo !== 'incidencia') return null;
   if (typeof r.reporte.viajeId !== 'string' || typeof r.reporte.ocurrioEn !== 'string') return null;
   const { aviso, ...resto } = r;

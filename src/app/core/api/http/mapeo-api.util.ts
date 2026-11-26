@@ -7,16 +7,19 @@
 import { ErrorApiOperador } from '../operador-api';
 import {
   AcuseReporte,
+  AcuseTerminoIncidencia,
   AsignacionOperador,
   Autor,
   EstadoRemotoReporte,
   EstatusViaje,
   EventoViaje,
+  IncidenciaAbierta,
   MotivoTramoVacio,
   ReporteOperador,
   ResultadoReporte,
   Salida,
   SesionOperador,
+  TerminoIncidencia,
   TipoIncidencia,
   TramoVacio,
   Unidad,
@@ -131,6 +134,17 @@ function viajeDesdeApi(v: unknown): Viaje {
 type ViajeVacioEstatus = Extract<Viaje, { tipo: 'vacio' }>['estatus'];
 type ViajeCargadoEstatus = Extract<Viaje, { tipo: 'cargado' }>['estatus'];
 
+/** Solo id, tipo, ocurrioEn y nota (lista blanca). */
+function incidenciaAbiertaDesdeApi(v: unknown): IncidenciaAbierta {
+  const o = obj(v, 'incidenciasAbiertas');
+  return {
+    id: txt(o, 'id', 'incidenciasAbiertas'),
+    tipo: txt(o, 'tipo', 'incidenciasAbiertas') as TipoIncidencia,
+    ocurrioEn: txt(o, 'ocurrioEn', 'incidenciasAbiertas'),
+    nota: txtONull(o, 'nota'),
+  };
+}
+
 export function asignacionDesdeApi(json: unknown): AsignacionOperador {
   const o = obj(json, 'asignación');
   if (o['salida'] == null) return { salida: null };
@@ -141,6 +155,8 @@ export function asignacionDesdeApi(json: unknown): AsignacionOperador {
     notas: txtONull(s, 'notas'),
     unidad: unidadDesdeApi(s['unidad']),
     viajes: (Array.isArray(s['viajes']) ? s['viajes'] : invalida('salida.viajes')).map(viajeDesdeApi),
+    // Migración 48. Sin la lista (servidor anterior): ninguna abierta.
+    incidenciasAbiertas: (Array.isArray(s['incidenciasAbiertas']) ? s['incidenciasAbiertas'] : []).map(incidenciaAbiertaDesdeApi),
   };
   return { salida };
 }
@@ -172,6 +188,29 @@ export function estadosDesdeApi(json: unknown): EstadoRemotoReporte[] {
     const resultado = resultadoDesdeApi(o['resultado']);
     return { id: txt(o, 'id', 'estado'), resultado, confirmadoEn: resultado === 'confirmado' ? txtONull(o, 'confirmadoEn') : null, mensaje: txtONull(o, 'mensaje') };
   });
+}
+
+// ------------------------------------------------------------------ terminar una incidencia (sección 7)
+
+/** Cuerpo de POST api/operador/incidencias/terminar. `tipo` es solo de la app: no se manda. */
+export function terminoParaApi(t: TerminoIncidencia): Record<string, unknown> {
+  const ubicacion = t.ubicacion
+    ? { lat: t.ubicacion.lat, lng: t.ubicacion.lng, precisionM: t.ubicacion.precisionM, tomadoEn: t.ubicacion.tomadoEn }
+    : null;
+  return { id: t.id, incidenciaId: t.incidenciaId, terminadaEn: t.terminadaEn, ubicacion, nota: t.nota };
+}
+
+export function acuseTerminoDesdeApi(json: unknown): AcuseTerminoIncidencia {
+  const o = obj(json, 'acuse de término');
+  const resultado = o['resultado'] === 'terminada' || o['resultado'] === 'ya-terminada' ? o['resultado'] : invalida('acuse de término.resultado');
+  return {
+    id: txt(o, 'id', 'acuse de término'),
+    incidenciaId: txt(o, 'incidenciaId', 'acuse de término'),
+    recibidoEn: txt(o, 'recibidoEn', 'acuse de término'),
+    terminadaEn: txt(o, 'terminadaEn', 'acuse de término'),
+    resultado,
+    mensaje: txtONull(o, 'mensaje'),
+  };
 }
 
 /** Límite del contrato para POST reportes/estado. */

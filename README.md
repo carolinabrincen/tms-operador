@@ -51,6 +51,19 @@ service worker, la ubicación y `crypto.randomUUID` no funcionan en `http://` sa
 - La hora del reporte es la del teléfono: si va adelantada (el servidor rechaza más de 10 minutos), la app avisa desde
   los 5 minutos comparando con la hora del servidor de cada acuse.
 
+## Incidencias abiertas y "Ya continué" (contrato M1, secciones 2 y 7)
+
+- La asignación trae `incidenciasAbiertas` (también las que registró la oficina). En Mi viaje, arriba de "Siguiente paso",
+  hay una tarjeta ámbar por cada una: tipo, "desde las 14:07" (hora del negocio), su nota y el botón **Ya continué**.
+- "Ya continué" pide confirmar (nota opcional) y manda el término por **la misma cola** que los reportes: id propio,
+  se guarda primero en el teléfono, se envía con señal, reenviar el mismo id no duplica y lleva la ubicación si hay
+  permiso. En cola, la tarjeta dice "Pendiente de enviar" y no repite el botón. Si el servidor responde que ya estaba
+  terminada (por usted, por un estatus o por la oficina), se toma como hecho, sin error.
+- No bloquea nada: si el operador reporta su siguiente paso, el servidor termina las abiertas de ese viaje y al
+  refrescar la tarjeta desaparece. Una incidencia reportada desde la app aparece de inmediato (sin botón hasta que la
+  oficina la recibe y la asignación trae su id).
+- Errores de la sección 7: un texto de usted por código (`shared/utils/incidencias-abiertas.util.ts`).
+
 ## Hoja de ruta (contrato M2, sección 1)
 
 - "Mi viaje" → **Ver hoja de ruta** (`/hoja-ruta`): empresa y teléfonos (tráfico 24 h y oficina; al tocarlos, llama),
@@ -103,6 +116,7 @@ service worker, la ubicación y `crypto.randomUUID` no funcionan en `http://` sa
 
 - Cualquier celular de 10 dígitos con un PIN de 6 números entra. Si el celular termina en `0000`, entra sin viaje.
 - Una salida con 4 viajes: vacío a cargar combustible, dos cargados, y un regreso vacío cuyo último tramo va al taller.
+- Una incidencia abierta que registró la oficina en el viaje 1 (Retén o inspección); "Salí" la termina sola.
 - Hoja de ruta de esa salida (el tramo 3 lleva material peligroso) y, en el viaje 2, una Carta Porte que "subió la
   oficina" (se ve solo como renglón). Las fotos se guardan en memoria con las reglas del contrato.
 - La "oficina" de ejemplo:

@@ -15,33 +15,39 @@
  *  - Para pruebas, la "oficina" puede además anular un hito ya confirmado (`anularHito`) y cerrar la salida
  *    (`cerrarSalida`), como en el contrato M1 (3.1 y 2).
  *  - Los mensajes van en español legible, como los del servidor (nunca el valor técnico).
+ *  - Incidencias abiertas (sección 2 y 7): hay una que registró la oficina en el viaje 1. "Ya continué" la termina
+ *    (idempotente por id; si ya estaba terminada, 'ya-terminada'). Un estatus nuevo de ese viaje la termina solo.
+ *    `terminarIncidenciaPorOficina` (para pruebas).
  *  - M2: hoja de ruta de la salida (null sin salida) y evidencias en memoria con las reglas del contrato (solo viajes
  *    cargados, viaje cancelado, tipo y descripción, 5 MB, 30 por viaje, id idempotente con la misma foto y 409 con
  *    otra). Hay una evidencia de la oficina (PDF) en el viaje 2 que no se descarga. `anularEvidencia` (para pruebas).
  */
 import { mensajeCelular, mensajePin, normalizarCelular, terminacionCelular } from '../../../shared/utils/acceso.util';
 import { esHito, esPasoDelOperador, rango, textoEstatus, viajeTerminado } from '../../../shared/utils/estatus-viaje.util';
-import { esTipoIncidencia } from '../../../shared/utils/incidencias.util';
+import { esTipoIncidencia, textoIncidencia } from '../../../shared/utils/incidencias.util';
 import { ahoraIsoUtc, msDeIso } from '../../../shared/utils/zona-negocio.util';
 import { textoEvidencia } from '../../../shared/utils/evidencias.util';
-import { CODIGOS_EVIDENCIA, ErrorApiOperador, OperadorApi } from '../operador-api';
+import { CODIGOS_EVIDENCIA, CODIGOS_TERMINO, ErrorApiOperador, OperadorApi } from '../operador-api';
 import { AcuseEvidencia, DatosEvidencia, EstadoRemotoEvidencia, EvidenciaViaje, HojaRuta, TIPOS_EVIDENCIA } from '../operador-api-m2.modelos';
 import {
   AcuseReporte,
+  AcuseTerminoIncidencia,
   AsignacionOperador,
   Autor,
   EstadoRemotoReporte,
   EstatusViaje,
   EventoViaje,
+  IncidenciaAbierta,
   ReporteEstatus,
   ReporteIncidencia,
   ReporteOperador,
   ResultadoReporte,
   Salida,
   SesionOperador,
+  TerminoIncidencia,
   Viaje,
 } from '../operador-api.modelos';
-import { CELULAR_EJEMPLO_SIN_VIAJE, evidenciasOficinaEjemplo, hojaRutaEjemplo, salidaEjemplo } from './datos-ejemplo';
+import { CELULAR_EJEMPLO_SIN_VIAJE, evidenciasOficinaEjemplo, hojaRutaEjemplo, incidenciaOficinaEjemplo, salidaEjemplo } from './datos-ejemplo';
 
 export interface OpcionesEjemplo {
   /** Operador con sesión en el teléfono (hace las veces del token). */
@@ -86,8 +92,16 @@ interface EvidenciaEjemplo {
 const MAX_BYTES_EVIDENCIA = 5 * 1024 * 1024;
 const MAX_EVIDENCIAS_VIAJE = 30;
 
+interface IncidenciaEjemplo {
+  info: IncidenciaAbierta;
+  /** null = de la salida, sin viaje. */
+  viajeId: string | null;
+  terminada: { por: 'operador' | 'estatus' | 'oficina'; en: string; terminoId: string | null } | null;
+}
+
 interface EstadoOperador {
   salida: Salida | null;
+  incidencias: IncidenciaEjemplo[];
   /** La salida que la oficina cerró: sus reportes tardíos se reciben como historial (sin efecto). */
   cerrada: Salida | null;
   programados: Programado[];
@@ -99,6 +113,7 @@ export class OperadorApiEjemplo implements OperadorApi {
   private readonly recibidos = new Map<string, Recibido>();
   private readonly operadores = new Map<string, EstadoOperador>();
   private readonly evidencias = new Map<string, EvidenciaEjemplo>();
+  private readonly terminos = new Map<string, { operadorId: string; acuse: AcuseTerminoIncidencia }>();
   private secuencia = 0;
 
   constructor(opciones: Partial<OpcionesEjemplo> = {}) {
@@ -139,7 +154,13 @@ export class OperadorApiEjemplo implements OperadorApi {
   async obtenerAsignacion(): Promise<AsignacionOperador> {
     await this.red();
     const estado = this.estadoDe(this.sesion());
-    return { salida: estado.salida ? structuredClone(estado.salida) : null };
+    if (!estado.salida) return { salida: null };
+    const salida = structuredClone(estado.salida);
+    salida.incidenciasAbiertas = estado.incidencias
+      .filter((i) => !i.terminada)
+      .map((i) => structuredClone(i.info))
+      .sort((a, b) => a.ocurrioEn.localeCompare(b.ocurrioEn));
+    return { salida };
   }
 
   async enviarReporte(reporte: ReporteOperador): Promise<AcuseReporte> {
@@ -168,7 +189,7 @@ export class OperadorApiEjemplo implements OperadorApi {
     if (msDeIso(reporte.ocurrioEn) == null) throw new ErrorApiOperador('rechazado', 'La hora del reporte no es válida.');
 
     const recibido =
-      reporte.tipo === 'estatus' ? this.recibirEstatus(estado, viaje, reporte, sesion.operadorId) : this.recibirIncidencia(viaje, reporte, sesion.operadorId);
+      reporte.tipo === 'estatus' ? this.recibirEstatus(estado, viaje, reporte, sesion.operadorId) : this.recibirIncidencia(estado, viaje, reporte, sesion.operadorId);
     this.recibidos.set(reporte.id, recibido);
     return this.acuse(recibido);
   }
@@ -181,6 +202,62 @@ export class OperadorApiEjemplo implements OperadorApi {
       .map((id) => this.recibidos.get(id))
       .filter((r): r is Recibido => !!r && r.operadorId === sesion.operadorId)
       .map((r) => ({ id: r.reporte.id, resultado: r.resultado, confirmadoEn: r.confirmadoEn, mensaje: r.resultado === 'confirmado' ? null : r.mensaje }));
+  }
+
+  /** "Ya continué" (sección 7): idempotente por id; si ya estaba terminada, 'ya-terminada' (no es error). */
+  async terminarIncidencia(t: TerminoIncidencia): Promise<AcuseTerminoIncidencia> {
+    await this.red();
+    const sesion = this.sesion();
+    const estado = this.estadoDe(sesion);
+    const previo = this.terminos.get(t.id);
+    if (previo) {
+      if (previo.operadorId !== sesion.operadorId) {
+        throw new ErrorApiOperador('id-duplicado', 'Ese id ya lo usó otro operador.', CODIGOS_TERMINO.claveDuplicada, 409);
+      }
+      return { ...previo.acuse }; // reenviar el mismo id: el mismo acuse, sin cambiar nada
+    }
+    const rechazo = (codigo: string, mensaje: string, status: number) => new ErrorApiOperador('rechazado', mensaje, codigo, status);
+    const inc = estado.incidencias.find((i) => i.info.id === t.incidenciaId);
+    if (!inc) throw rechazo(CODIGOS_TERMINO.noEncontrada, 'No se encontró la incidencia en sus salidas.', 404);
+    const texto = textoIncidencia(inc.info.tipo);
+    const recibidoEn = this.iso();
+    if (inc.terminada) {
+      const mensajes = {
+        operador: `Usted ya había terminado la incidencia ${texto}.`,
+        estatus: `La incidencia ${texto} ya había terminado al registrarse un estatus.`,
+        oficina: `La oficina ya había terminado la incidencia ${texto}.`,
+      };
+      const acuse: AcuseTerminoIncidencia = {
+        id: t.id,
+        incidenciaId: inc.info.id,
+        recibidoEn,
+        terminadaEn: inc.terminada.en,
+        resultado: 'ya-terminada',
+        mensaje: mensajes[inc.terminada.por],
+      };
+      this.terminos.set(t.id, { operadorId: sesion.operadorId, acuse });
+      return { ...acuse };
+    }
+    if (!estado.salida) throw rechazo(CODIGOS_TERMINO.salidaCerrada, 'La salida ya no está activa.', 409);
+    const terminadaEn = t.terminadaEn ?? recibidoEn;
+    const ms = msDeIso(terminadaEn);
+    const desde = msDeIso(inc.info.ocurrioEn) ?? 0;
+    if (ms == null || ms < desde || ms > this.opciones.ahora().getTime() + 10 * 60 * 1000) {
+      throw rechazo(CODIGOS_TERMINO.horaInvalida, 'La hora de término no es válida.', 400);
+    }
+    if ((t.nota?.length ?? 0) > 500) throw rechazo(CODIGOS_TERMINO.eventoInvalido, 'La nota es demasiado larga.', 400);
+    inc.terminada = { por: 'operador', en: terminadaEn, terminoId: t.id };
+    const acuse: AcuseTerminoIncidencia = { id: t.id, incidenciaId: inc.info.id, recibidoEn, terminadaEn, resultado: 'terminada', mensaje: null };
+    this.terminos.set(t.id, { operadorId: sesion.operadorId, acuse });
+    return { ...acuse };
+  }
+
+  /** La oficina termina una incidencia (para pruebas). */
+  terminarIncidenciaPorOficina(operadorId: string, incidenciaId: string): boolean {
+    const inc = this.operadores.get(operadorId)?.incidencias.find((i) => i.info.id === incidenciaId);
+    if (!inc || inc.terminada) return false;
+    inc.terminada = { por: 'oficina', en: this.iso(), terminoId: null };
+    return true;
   }
 
   // ------------------------------------------------------------------ M2: hoja de ruta y evidencias
@@ -328,41 +405,49 @@ export class OperadorApiEjemplo implements OperadorApi {
         rec.resultado = 'confirmado';
         rec.confirmadoEn = ahoraIsoUtc(new Date(en));
         // Lo ocurrido queda en el historial aunque el viaje ya vaya más adelante.
-        this.poner(viaje, r.estatus, r.ocurrioEn, 'operador', r.id, true);
+        this.poner(estado, viaje, r.estatus, r.ocurrioEn, 'operador', r.id, true);
         if (r.estatus === 'Descargado') this.programarCierre(estado, viaje, en);
       });
       return { ...base, resultado: 'por-confirmar', mensaje: 'Recibido; la oficina lo confirma.' };
     }
-    this.poner(viaje, r.estatus, r.ocurrioEn, 'operador', r.id, false);
+    this.poner(estado, viaje, r.estatus, r.ocurrioEn, 'operador', r.id, false);
     if (r.estatus === 'EnCarga') {
       // La oficina captura toneladas y pone Documentado por su cuenta, salvo que el operador ya lo haya reportado.
       this.programar(estado, this.opciones.oficinaAvanzaTrasMs, (en) => {
         const hitoDelOperador = [...this.recibidos.values()].some(
           (x) => x.reporte.viajeId === viaje.id && x.reporte.tipo === 'estatus' && x.reporte.estatus === 'Documentado',
         );
-        if (!hitoDelOperador) this.poner(viaje, 'Documentado', ahoraIsoUtc(new Date(en)), 'oficina', null, false);
+        if (!hitoDelOperador) this.poner(estado, viaje, 'Documentado', ahoraIsoUtc(new Date(en)), 'oficina', null, false);
       });
     }
     if (viaje.tipo === 'vacio' && (r.estatus === 'EnPatio' || r.estatus === 'EnTaller')) this.programarCierre(estado, viaje);
     return { ...base, resultado: 'aplicado', mensaje: null };
   }
 
-  private recibirIncidencia(viaje: Viaje, r: ReporteIncidencia, operadorId: string): Recibido {
+  private recibirIncidencia(estado: EstadoOperador, viaje: Viaje, r: ReporteIncidencia, operadorId: string): Recibido {
     if (!esTipoIncidencia(r.incidencia)) throw new ErrorApiOperador('rechazado', 'Tipo de incidencia desconocido.');
     if (r.incidencia === 'Otro' && !r.nota?.trim()) throw new ErrorApiOperador('rechazado', 'En “Otro” la nota es obligatoria.');
     if (viajeTerminado(viaje)) throw new ErrorApiOperador('rechazado', 'El viaje ya está cerrado.');
     this.insertar(viaje, { tipo: 'incidencia', incidencia: r.incidencia, nota: r.nota, ocurrioEn: r.ocurrioEn, autor: 'operador', reporteId: r.id });
+    // Queda abierta hasta que el operador diga "Ya continué", la termine la oficina o se aplique un estatus nuevo.
+    estado.incidencias.push({ info: { id: `ej-inc-${r.id}`, tipo: r.incidencia, ocurrioEn: r.ocurrioEn, nota: r.nota }, viajeId: viaje.id, terminada: null });
     return { reporte: structuredClone(r), operadorId, recibidoEn: this.iso(), resultado: 'registrado', mensaje: null, confirmadoEn: null };
   }
 
   private programarCierre(estado: EstadoOperador, viaje: Viaje, desde?: number): void {
-    this.programar(estado, this.opciones.cierreTrasMs, (en) => this.poner(viaje, 'Cerrado', ahoraIsoUtc(new Date(en)), 'oficina', null, false), desde);
+    this.programar(estado, this.opciones.cierreTrasMs, (en) => this.poner(estado, viaje, 'Cerrado', ahoraIsoUtc(new Date(en)), 'oficina', null, false), desde);
   }
 
   /** Pone un estatus si avanza; con `aunqueNoAvance` lo deja en el historial aunque el viaje ya vaya adelante. */
-  private poner(viaje: Viaje, e: EstatusViaje, ocurrioEn: string, autor: Autor, reporteId: string | null, aunqueNoAvance: boolean): void {
+  private poner(estado: EstadoOperador, viaje: Viaje, e: EstatusViaje, ocurrioEn: string, autor: Autor, reporteId: string | null, aunqueNoAvance: boolean): void {
     const avanza = rango(viaje.tipo, e) > rango(viaje.tipo, viaje.estatus);
-    if (avanza) (viaje as { estatus: EstatusViaje }).estatus = e;
+    if (avanza) {
+      (viaje as { estatus: EstatusViaje }).estatus = e;
+      // Término automático: las abiertas de ese viaje y las de la salida sin viaje terminan a la hora del estatus.
+      for (const i of estado.incidencias) {
+        if (!i.terminada && (i.viajeId === viaje.id || i.viajeId === null)) i.terminada = { por: 'estatus', en: ocurrioEn, terminoId: null };
+      }
+    }
     if (avanza || aunqueNoAvance) this.insertar(viaje, { tipo: 'estatus', estatus: e, nota: null, ocurrioEn, autor, reporteId });
   }
 
@@ -382,8 +467,12 @@ export class OperadorApiEjemplo implements OperadorApi {
   private estadoDe(sesion: { operadorId: string; sinViaje: boolean }): EstadoOperador {
     let estado = this.operadores.get(sesion.operadorId);
     if (!estado) {
-      estado = { salida: sesion.sinViaje ? null : salidaEjemplo(this.opciones.ahora()), cerrada: null, programados: [] };
+      estado = { salida: sesion.sinViaje ? null : salidaEjemplo(this.opciones.ahora()), incidencias: [], cerrada: null, programados: [] };
       if (estado.salida) {
+        const { viajeId, info } = incidenciaOficinaEjemplo(this.opciones.ahora());
+        estado.incidencias.push({ info, viajeId, terminada: null });
+        const viaje = estado.salida.viajes.find((v) => v.id === viajeId);
+        if (viaje) this.insertar(viaje, { tipo: 'incidencia', incidencia: info.tipo, nota: info.nota, ocurrioEn: info.ocurrioEn, autor: 'oficina', reporteId: null });
         for (const info of evidenciasOficinaEjemplo(this.opciones.ahora())) {
           this.evidencias.set(`${sesion.operadorId}:${info.id}`, { operadorId: sesion.operadorId, info, bytes: null, recibidaEn: info.subidaEn, anulada: null });
         }

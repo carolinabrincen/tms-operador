@@ -6,16 +6,26 @@ import { NAVEGADOR } from '../../plataforma';
 import { ALMACEN_CREDENCIALES } from '../../sesion/almacen-credenciales';
 import { ErrorApiOperador, OperadorApi } from '../operador-api';
 import { AcuseEvidencia, DatosEvidencia, EstadoRemotoEvidencia, EvidenciaViaje, HojaRuta } from '../operador-api-m2.modelos';
-import { AcuseReporte, AsignacionOperador, EstadoRemotoReporte, ReporteOperador, SesionOperador } from '../operador-api.modelos';
+import {
+  AcuseReporte,
+  AcuseTerminoIncidencia,
+  AsignacionOperador,
+  EstadoRemotoReporte,
+  ReporteOperador,
+  SesionOperador,
+  TerminoIncidencia,
+} from '../operador-api.modelos';
 import { ContextoPeticion, MENSAJES, clasificarError } from './errores-api.util';
 import {
   Credenciales,
   MAX_IDS_ESTADO,
   acuseDesdeApi,
+  acuseTerminoDesdeApi,
   asignacionDesdeApi,
   estadosDesdeApi,
   reporteParaApi,
   sesionDesdeApi,
+  terminoParaApi,
 } from './mapeo-api.util';
 import {
   acuseEvidenciaDesdeApi,
@@ -115,6 +125,11 @@ export class OperadorApiHttp implements OperadorApi {
       estados.push(...estadosDesdeApi(await this.autorizada('POST', 'reportes/estado', { ids: lote })));
     }
     return estados;
+  }
+
+  /** "Ya continué" (sección 7). Idempotente por id; 'ya-terminada' no es un error. */
+  async terminarIncidencia(termino: TerminoIncidencia): Promise<AcuseTerminoIncidencia> {
+    return acuseTerminoDesdeApi(await this.autorizada('POST', 'incidencias/terminar', terminoParaApi(termino)));
   }
 
   // ------------------------------------------------------------------ M2: hoja de ruta y evidencias

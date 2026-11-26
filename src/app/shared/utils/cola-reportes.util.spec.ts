@@ -62,6 +62,8 @@ describe('cola-reportes.util: reglas de la cola del teléfono', () => {
       'por-confirmar': 'por-confirmar',
       confirmado: 'confirmado',
       descartado: 'descartado',
+      terminada: 'enviado',
+      'ya-terminada': 'enviado',
     });
   });
 

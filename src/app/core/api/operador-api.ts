@@ -1,6 +1,14 @@
 import { InjectionToken } from '@angular/core';
 import { AcuseEvidencia, DatosEvidencia, EstadoRemotoEvidencia, EvidenciaViaje, HojaRuta } from './operador-api-m2.modelos';
-import { AcuseReporte, AsignacionOperador, EstadoRemotoReporte, ReporteOperador, SesionOperador } from './operador-api.modelos';
+import {
+  AcuseReporte,
+  AcuseTerminoIncidencia,
+  AsignacionOperador,
+  EstadoRemotoReporte,
+  ReporteOperador,
+  SesionOperador,
+  TerminoIncidencia,
+} from './operador-api.modelos';
 
 /**
  * ÚNICA puerta a la API del operador. Dos implementaciones, elegidas por environment.fuenteDatos:
@@ -34,6 +42,12 @@ export interface OperadorApi {
 
   /** Estado actual de reportes ya enviados. Los ids que el servidor no conozca no se devuelven. */
   consultarReportes(ids: string[]): Promise<EstadoRemotoReporte[]>;
+
+  /**
+   * "Ya continué": termina una incidencia abierta de su salida activa (sección 7). IDEMPOTENTE por termino.id. Si ya
+   * estaba terminada, el acuse dice 'ya-terminada' (no es un error).
+   */
+  terminarIncidencia(termino: TerminoIncidencia): Promise<AcuseTerminoIncidencia>;
 
   // ------------------------------------------------------------ M2
 
@@ -91,6 +105,16 @@ export function comoErrorApi(error: unknown): ErrorApiOperador {
 
 /** Código del contrato para un reporte con la hora del teléfono en el futuro. */
 export const CODIGO_HORA_INVALIDA = 'DESPACHO_EVENTO_HORA_INVALIDA';
+
+/** Códigos de error al terminar una incidencia (contrato M1, sección 7). */
+export const CODIGOS_TERMINO = {
+  invalido: 'OPERADOR_REPORTE_INVALIDO',
+  eventoInvalido: 'DESPACHO_EVENTO_INVALIDO',
+  horaInvalida: 'DESPACHO_EVENTO_HORA_INVALIDA',
+  noEncontrada: 'OPERADOR_INCIDENCIA_NO_ENCONTRADA',
+  salidaCerrada: 'OPERADOR_SALIDA_CERRADA',
+  claveDuplicada: 'DESPACHO_EVENTO_CLAVE_DUPLICADA',
+} as const;
 
 /** Códigos de error de evidencias (contrato M2, 2.1). */
 export const CODIGOS_EVIDENCIA = {

@@ -9,6 +9,7 @@ import { activarRefrescoDelViaje } from '../../core/viaje/refresco-viaje';
 import { BarraAvanceComponent } from '../../shared/ui/barra-avance.component';
 import { DatosViajeComponent } from '../../shared/ui/datos-viaje.component';
 import { EncabezadoComponent } from '../../shared/ui/encabezado.component';
+import { IncidenciasAbiertasComponent } from '../../shared/ui/incidencias-abiertas.component';
 import { EtiquetaEstatusComponent } from '../../shared/ui/etiqueta-estatus.component';
 import { LineaTiempoComponent } from '../../shared/ui/linea-tiempo.component';
 import { PanelAvanceComponent } from '../../shared/ui/panel-avance.component';
@@ -23,6 +24,7 @@ import { cuandoNegocio } from '../../shared/utils/zona-negocio.util';
   imports: [
     RouterLink,
     EncabezadoComponent,
+    IncidenciasAbiertasComponent,
     BarraAvanceComponent,
     TrayectoComponent,
     PanelAvanceComponent,

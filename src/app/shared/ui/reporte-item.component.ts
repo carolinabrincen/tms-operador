@@ -1,11 +1,11 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { ReporteLocal } from '../../core/reportes/reporte-local';
-import { ETIQUETA_ESTADO_REPORTE } from '../utils/cola-reportes.util';
+import { ETIQUETA_ESTADO_REPORTE, horaDelEnvio } from '../utils/cola-reportes.util';
 import { textoBoton, textoEstatus } from '../utils/estatus-viaje.util';
 import { textoIncidencia } from '../utils/incidencias.util';
 import { cuandoNegocio, fechaHoraNegocio } from '../utils/zona-negocio.util';
 
-/** Un reporte con su estado: pendiente de enviar, enviado, pendiente de confirmar, confirmado o no aceptado. */
+/** Un reporte (o un "Ya continué") con su estado: pendiente de enviar, enviado, pendiente de confirmar, confirmado o no aceptado. */
 @Component({
   selector: 'app-reporte-item',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -63,9 +63,10 @@ export class ReporteItemComponent {
   readonly reporte = input.required<ReporteLocal>();
   readonly mostrarResumen = input(true);
 
-  /** Lo que el operador tocó: "Me están cargando" o "Incidencia: Falla mecánica". */
+  /** Lo que el operador tocó: "Me están cargando", "Incidencia: Falla mecánica" o "Ya continué". */
   protected readonly titulo = computed(() => {
     const r = this.reporte().reporte;
+    if (r.tipo === 'termino') return 'Ya continué';
     return r.tipo === 'estatus' ? textoBoton(r.estatus) : `Incidencia: ${textoIncidencia(r.incidencia)}`;
   });
   /** Para estatus: a qué estatus lleva ("Estatus: Cargando"). */
@@ -76,6 +77,6 @@ export class ReporteItemComponent {
   /** Sin efecto o descartado: el mensaje es un aviso (no contó). Si no, es informativo ("Recibido; la oficina lo confirma."). */
   protected readonly avisoFuerte = computed(() => this.reporte().estado === 'descartado' || this.reporte().resultado === 'sin-efecto');
   protected readonly etiquetaEstado = computed(() => ETIQUETA_ESTADO_REPORTE[this.reporte().estado]);
-  protected readonly cuando = computed(() => cuandoNegocio(this.reporte().reporte.ocurrioEn));
-  protected readonly fechaCompleta = computed(() => fechaHoraNegocio(this.reporte().reporte.ocurrioEn));
+  protected readonly cuando = computed(() => cuandoNegocio(horaDelEnvio(this.reporte().reporte)));
+  protected readonly fechaCompleta = computed(() => fechaHoraNegocio(horaDelEnvio(this.reporte().reporte)));
 }

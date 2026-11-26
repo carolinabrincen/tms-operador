@@ -1,7 +1,7 @@
 import { ErrorApiOperador } from '../operador-api';
 import { DatosEvidencia } from '../operador-api-m2.modelos';
 import { fotoJpeg } from '../../../testing/entorno-pruebas';
-import { EstatusViaje, ReporteEstatus, ReporteIncidencia, Viaje } from '../operador-api.modelos';
+import { EstatusViaje, ReporteEstatus, ReporteIncidencia, TerminoIncidencia, Viaje } from '../operador-api.modelos';
 import { OperadorApiEjemplo, OpcionesEjemplo } from './operador-api-ejemplo';
 
 const CAMPOS_PROHIBIDOS = /tarifa|ingreso|costo|utilidad|pago|precio|importe|flete|monto|margen|sueldo|comision|comisión/i;
@@ -82,7 +82,11 @@ describe('OperadorApiEjemplo: implementación en memoria', () => {
     await c.entrar();
     const { salida } = await c.api.obtenerAsignacion();
     expect(salida!.viajes.map((v) => `${v.orden}:${v.tipo}:${v.estatus}`)).toEqual(['1:vacio:Asignado', '2:cargado:Asignado', '3:cargado:Asignado', '4:vacio:Asignado']);
-    expect(salida!.viajes[0].historial).toEqual([{ tipo: 'estatus', estatus: 'Asignado', nota: null, ocurrioEn: '2026-11-23T15:00:00Z', autor: 'oficina', reporteId: null }]);
+    expect(salida!.viajes[0].historial).toEqual([
+      { tipo: 'estatus', estatus: 'Asignado', nota: null, ocurrioEn: '2026-11-23T15:00:00Z', autor: 'oficina', reporteId: null },
+      // La incidencia que registró la oficina (sigue abierta: ver incidenciasAbiertas).
+      { tipo: 'incidencia', incidencia: 'RetenOInspeccion', nota: 'Revisión de documentos a la salida del patio', ocurrioEn: '2026-11-23T15:20:00Z', autor: 'oficina', reporteId: null },
+    ]);
   });
 
   it('celular terminado en 0000: sin salida', async () => {
@@ -380,5 +384,105 @@ describe('OperadorApiEjemplo M2: hoja de ruta y evidencias', () => {
     expect(await c.api.archivoEvidencia('e1')).toBeNull();
     expect(await c.api.consultarEvidencias(['e1', 'no-llego'])).toEqual([{ id: 'e1', estado: 'anulada', motivo: 'La oficina anuló la evidencia: borrosa' }]);
     expect((await c.api.evidenciasDeViaje(CARGADO)).map((e) => e.autor)).toEqual(['oficina']);
+  });
+});
+
+describe('OperadorApiEjemplo: incidencias abiertas y "Ya continué" (secciones 2 y 7)', () => {
+  const OFICINA = 'ej-inc-oficina-1';
+  const termino = (id: string, incidenciaId = OFICINA, terminadaEn = '2026-11-23T16:00:00Z'): TerminoIncidencia => ({
+    tipo: 'termino',
+    id,
+    incidenciaId,
+    terminadaEn,
+    ubicacion: null,
+    nota: null,
+  });
+
+  it('la asignación trae la incidencia abierta de la oficina, solo con id, tipo, ocurrioEn y nota', async () => {
+    const c = crear();
+    await c.entrar();
+    const { salida } = await c.api.obtenerAsignacion();
+    expect(salida!.incidenciasAbiertas).toEqual([
+      { id: OFICINA, tipo: 'RetenOInspeccion', ocurrioEn: '2026-11-23T15:20:00Z', nota: 'Revisión de documentos a la salida del patio' },
+    ]);
+  });
+
+  it('GUARDA DE DINERO: las incidencias abiertas y el acuse del término no tienen tarifas, importes ni pagos', async () => {
+    const c = crear();
+    await c.entrar();
+    expect(llaves((await c.api.obtenerAsignacion()).salida!.incidenciasAbiertas).filter((k) => CAMPOS_PROHIBIDOS.test(k))).toEqual([]);
+    expect(llaves(await c.api.terminarIncidencia(termino('t1'))).filter((k) => CAMPOS_PROHIBIDOS.test(k))).toEqual([]);
+  });
+
+  it('"Ya continué": terminada al momento y sale de abiertas; reenviar el mismo id da el mismo acuse sin cambiar nada', async () => {
+    const c = crear();
+    await c.entrar();
+    const a1 = await c.api.terminarIncidencia(termino('t1'));
+    expect(a1).toEqual({ id: 't1', incidenciaId: OFICINA, recibidoEn: '2026-11-23T16:00:00Z', terminadaEn: '2026-11-23T16:00:00Z', resultado: 'terminada', mensaje: null });
+    expect((await c.api.obtenerAsignacion()).salida!.incidenciasAbiertas).toEqual([]);
+    c.avanzar(60_000);
+    expect(await c.api.terminarIncidencia(termino('t1'))).toEqual(a1);
+  });
+
+  it('ya terminada: por usted con otro id, por un estatus nuevo o por la oficina (mensaje de usted, sin error)', async () => {
+    const c = crear();
+    const op = await c.entrar();
+    await c.api.terminarIncidencia(termino('t1'));
+    expect(await c.api.terminarIncidencia(termino('t2'))).toMatchObject({
+      resultado: 'ya-terminada',
+      terminadaEn: '2026-11-23T16:00:00Z',
+      mensaje: 'Usted ya había terminado la incidencia Retén o inspección.',
+    });
+
+    const c2 = crear();
+    await c2.entrar();
+    await c2.api.enviarReporte(estatus(VACIO_PATIO, 'EnTransitoVacio')); // término automático
+    expect((await c2.api.obtenerAsignacion()).salida!.incidenciasAbiertas).toEqual([]);
+    expect(await c2.api.terminarIncidencia(termino('t3'))).toMatchObject({
+      resultado: 'ya-terminada',
+      mensaje: 'La incidencia Retén o inspección ya había terminado al registrarse un estatus.',
+    });
+
+    const c3 = crear();
+    const op3 = await c3.entrar();
+    await c3.api.obtenerAsignacion();
+    expect(c3.api.terminarIncidenciaPorOficina(op3, OFICINA)).toBe(true);
+    expect(await c3.api.terminarIncidencia(termino('t4'))).toMatchObject({ resultado: 'ya-terminada', mensaje: 'La oficina ya había terminado la incidencia Retén o inspección.' });
+    expect(op).toBeTruthy();
+  });
+
+  it('un estatus de OTRO viaje no termina la incidencia de este viaje', async () => {
+    const c = crear();
+    await c.entrar();
+    await c.api.enviarReporte(estatus(CARGADO, 'EnPosicionamiento'));
+    expect((await c.api.obtenerAsignacion()).salida!.incidenciasAbiertas.map((i) => i.id)).toEqual([OFICINA]);
+  });
+
+  it('una incidencia reportada desde la app queda abierta hasta "Ya continué"', async () => {
+    const c = crear();
+    await c.entrar();
+    const r = incidencia(CARGADO, { incidencia: 'DetenidoEnParador', ocurrioEn: '2026-11-23T15:50:00Z', nota: 'Parador km 40' });
+    await c.api.enviarReporte(r);
+    const abiertas = (await c.api.obtenerAsignacion()).salida!.incidenciasAbiertas;
+    expect(abiertas.map((i) => i.tipo)).toEqual(['RetenOInspeccion', 'DetenidoEnParador']); // de la más antigua a la más reciente
+    expect(abiertas[1]).toMatchObject({ ocurrioEn: '2026-11-23T15:50:00Z', nota: 'Parador km 40' });
+    await c.api.terminarIncidencia(termino('t1', abiertas[1].id));
+    expect((await c.api.obtenerAsignacion()).salida!.incidenciasAbiertas.map((i) => i.id)).toEqual([OFICINA]);
+  });
+
+  it('errores de la sección 7: no encontrada (404), hora antes del hecho (400), salida cerrada (409), id de otro operador (409)', async () => {
+    const c = crear();
+    const op = await c.entrar();
+    expect(await errorDe(c.api.terminarIncidencia(termino('x1', 'no-existe')))).toMatchObject({ tipo: 'rechazado', codigo: 'OPERADOR_INCIDENCIA_NO_ENCONTRADA', status: 404 });
+    expect(await errorDe(c.api.terminarIncidencia(termino('x2', OFICINA, '2026-11-23T15:00:00Z')))).toMatchObject({ codigo: 'DESPACHO_EVENTO_HORA_INVALIDA', status: 400 });
+    await c.api.terminarIncidencia(termino('mio'));
+    await c.entrar('8119999999');
+    expect(await errorDe(c.api.terminarIncidencia(termino('mio')))).toMatchObject({ tipo: 'id-duplicado', codigo: 'DESPACHO_EVENTO_CLAVE_DUPLICADA', status: 409 });
+    const c2 = crear();
+    const op2 = await c2.entrar();
+    await c2.api.obtenerAsignacion();
+    c2.api.cerrarSalida(op2);
+    expect(await errorDe(c2.api.terminarIncidencia(termino('x3')))).toMatchObject({ tipo: 'rechazado', codigo: 'OPERADOR_SALIDA_CERRADA', status: 409 });
+    expect(op).toBeTruthy();
   });
 });

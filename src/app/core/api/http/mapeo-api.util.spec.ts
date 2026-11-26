@@ -1,6 +1,6 @@
 import { ReporteOperador } from '../operador-api.modelos';
 import { SALIDA_CARGADA, SALIDA_VACIA } from '../../../testing/respuestas-api';
-import { acuseDesdeApi, asignacionDesdeApi, estadosDesdeApi, reporteParaApi, sesionDesdeApi } from './mapeo-api.util';
+import { acuseDesdeApi, acuseTerminoDesdeApi, asignacionDesdeApi, estadosDesdeApi, reporteParaApi, sesionDesdeApi, terminoParaApi } from './mapeo-api.util';
 
 describe('mapeo-api.util: API real (contrato M1) ↔ modelos de la app', () => {
   it('sesión: perfil por un lado, credenciales por otro', () => {
@@ -110,5 +110,41 @@ describe('mapeo-api.util: API real (contrato M1) ↔ modelos de la app', () => {
       { id: 'a', resultado: 'confirmado', confirmadoEn: '2026-11-23T20:40:00Z', mensaje: null },
       { id: 'b', resultado: 'descartado', confirmadoEn: null, mensaje: 'La oficina descartó el reporte: duplicado' },
     ]);
+  });
+
+  it('incidenciasAbiertas (migración 48): solo id, tipo, ocurrioEn y nota; sin la lista, ninguna', () => {
+    const conLista = structuredClone(SALIDA_CARGADA) as Record<string, any>;
+    conLista['salida'].incidenciasAbiertas = [
+      { id: 'inc-1', tipo: 'RetenOInspeccion', ocurrioEn: '2026-11-24T15:10:00Z', nota: 'Km 40', multa: 1500, importe: 300, autor: 'oficina' },
+    ];
+    const { salida } = asignacionDesdeApi(conLista);
+    expect(salida!.incidenciasAbiertas).toEqual([{ id: 'inc-1', tipo: 'RetenOInspeccion', ocurrioEn: '2026-11-24T15:10:00Z', nota: 'Km 40' }]);
+    // GUARDA DE DINERO: lo que venga de más (importes) no llega a la app.
+    expect(JSON.stringify(salida)).not.toMatch(/multa|importe|1500/);
+    const sinLista = structuredClone(SALIDA_CARGADA) as Record<string, any>;
+    delete sinLista['salida'].incidenciasAbiertas;
+    expect(asignacionDesdeApi(sinLista).salida!.incidenciasAbiertas).toEqual([]);
+  });
+
+  it('terminar una incidencia: el cuerpo del contrato (sin el "tipo" de la app) y el acuse', () => {
+    expect(
+      terminoParaApi({
+        tipo: 'termino',
+        id: 't1',
+        incidenciaId: 'inc-1',
+        terminadaEn: '2026-11-24T15:40:00Z',
+        ubicacion: { lat: 19.4326, lng: -99.1332, precisionM: 12.5, tomadoEn: '2026-11-24T15:39:58Z' },
+        nota: 'Ya pasé el retén',
+      }),
+    ).toEqual({
+      id: 't1',
+      incidenciaId: 'inc-1',
+      terminadaEn: '2026-11-24T15:40:00Z',
+      ubicacion: { lat: 19.4326, lng: -99.1332, precisionM: 12.5, tomadoEn: '2026-11-24T15:39:58Z' },
+      nota: 'Ya pasé el retén',
+    });
+    const acuse = { id: 't1', incidenciaId: 'inc-1', recibidoEn: 'r', terminadaEn: 'x', resultado: 'ya-terminada', mensaje: 'La oficina ya había terminado la incidencia Retén o inspección.', extra: 1 };
+    expect(acuseTerminoDesdeApi(acuse)).toEqual({ id: 't1', incidenciaId: 'inc-1', recibidoEn: 'r', terminadaEn: 'x', resultado: 'ya-terminada', mensaje: 'La oficina ya había terminado la incidencia Retén o inspección.' });
+    expect(() => acuseTerminoDesdeApi({ ...acuse, resultado: 'otro' })).toThrow(/Respuesta inesperada/);
   });
 });

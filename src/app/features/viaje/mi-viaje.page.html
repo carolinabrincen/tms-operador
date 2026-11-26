@@ -34,6 +34,8 @@
     }
   } @else {
     @if (activo(); as v) {
+      <!-- Arriba de "Siguiente paso": las incidencias que siguen abiertas (también las de la oficina). -->
+      <app-incidencias-abiertas [salida]="salida()" />
       <app-panel-avance [viaje]="v" />
 
       <section class="tarjeta" aria-label="Datos del viaje">
@@ -49,6 +51,7 @@
           <a routerLink="/reportes" class="btn btn-secundario btn-bloque">Ver mis reportes</a>
         }
       </section>
+      <app-incidencias-abiertas [salida]="salida()" />
     }
 
     @if (salida(); as s) {

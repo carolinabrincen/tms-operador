@@ -11,9 +11,10 @@ import {
   retrasoReintentoMs,
 } from '../../shared/utils/cola-reportes.util';
 import { generarIdReporte } from '../../shared/utils/id-reporte.util';
+import { mensajeErrorTermino } from '../../shared/utils/incidencias-abiertas.util';
 import { ahoraIsoUtc } from '../../shared/utils/zona-negocio.util';
 import { CODIGO_HORA_INVALIDA, OPERADOR_API, comoErrorApi } from '../api/operador-api';
-import { ReporteEstatus, ReporteIncidencia } from '../api/operador-api.modelos';
+import { ReporteEstatus, ReporteIncidencia, TerminoIncidencia } from '../api/operador-api.modelos';
 import { ConexionService } from '../conexion/conexion.service';
 import { NAVEGADOR, RELOJ } from '../plataforma';
 import { RelojTelefonoService } from '../reloj/reloj-telefono.service';
@@ -26,7 +27,7 @@ import { ReporteLocal } from './reporte-local';
 const MAX_CAMBIOS_DE_ID = 3;
 
 /** Un reporte por registrar: todo menos el id (lo pone la cola) y el texto para mostrarlo en la lista. */
-export type NuevoReporte = (Omit<ReporteEstatus, 'id'> | Omit<ReporteIncidencia, 'id'>) & { resumen: string };
+export type NuevoReporte = (Omit<ReporteEstatus, 'id'> | Omit<ReporteIncidencia, 'id'> | Omit<TerminoIncidencia, 'id'>) & { resumen: string };
 
 /**
  * Cola de reportes del teléfono. Cada reporte:
@@ -115,7 +116,7 @@ export class ColaReportesService {
     if (!operadorId) throw new Error('No hay sesión: no se puede registrar el reporte.');
     await this.cargaInicial;
     const { resumen, ...datos } = nuevo;
-    const reporte = { ...datos, id: generarIdReporte(), nota: datos.nota?.trim() ? datos.nota.trim() : null } as ReporteEstatus | ReporteIncidencia;
+    const reporte = { ...datos, id: generarIdReporte(), nota: datos.nota?.trim() ? datos.nota.trim() : null } as ReporteEstatus | ReporteIncidencia | TerminoIncidencia;
     const local = crearReporteLocal(reporte, operadorId, resumen, ahoraIsoUtc(this.reloj()));
     await this.almacen.guardar(local); // PRIMERO se guarda…
     this.poner(local);
@@ -196,7 +197,7 @@ export class ColaReportesService {
     for (const r of cola) {
       if (this.sesion.operadorId() !== operadorId) return; // cambió la sesión a medio camino
       try {
-        const acuse = await this.api.enviarReporte(r.reporte);
+        const acuse = r.reporte.tipo === 'termino' ? await this.api.terminarIncidencia(r.reporte) : await this.api.enviarReporte(r.reporte);
         this.relojTelefono.registrarHoraServidor(acuse.recibidoEn);
         await this.guardarYPoner(conEnvioExitoso(r, acuse, ahoraIsoUtc(this.reloj())));
         this.enviadosSig.update((n) => n + 1);
@@ -208,9 +209,12 @@ export class ColaReportesService {
           this.repetir = true;
           return;
         }
-        if (error.codigo === CODIGO_HORA_INVALIDA) this.relojTelefono.registrarHoraRechazada();
+        const esTermino = r.reporte.tipo === 'termino';
+        // En un término, la hora inválida puede ser "antes de la incidencia": no se culpa al reloj del teléfono.
+        if (error.codigo === CODIGO_HORA_INVALIDA && !esTermino) this.relojTelefono.registrarHoraRechazada();
         const tipo = error.tipo === 'id-duplicado' ? 'rechazado' : error.tipo; // tras varios cambios de id, ya no se insiste
-        const actualizado = conFallaEnvio(r, tipo, error.message, ahoraIsoUtc(this.reloj()));
+        const mensaje = esTermino && tipo === 'rechazado' ? mensajeErrorTermino(error.codigo, error.message) : error.message;
+        const actualizado = conFallaEnvio(r, tipo, mensaje, ahoraIsoUtc(this.reloj()));
         await this.guardarYPoner(actualizado);
         if (tipo === 'rechazado') continue; // no detiene a los demás
         if (error.tipo === 'sesion') {

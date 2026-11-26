@@ -44,6 +44,8 @@ export function lineaDeTiempo(v: Viaje, reportes: readonly ReporteParaGuia[]): E
 
   for (const r of reportes) {
     const rep = r.reporte;
+    // Un término ("Ya continué") no es un hecho del viaje: el servidor no lo pone en el historial.
+    if (rep.tipo === 'termino') continue;
     if (rep.viajeId !== v.id || yaEnServidor.has(rep.id) || !cuentaComoHecho(r)) continue;
     // Un intermedio "enviado" ya se aplicó en el servidor; si el historial aún no lo trae es porque falta actualizar.
     entradas.push({

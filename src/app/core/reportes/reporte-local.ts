@@ -1,9 +1,10 @@
-import { IsoUtc, ReporteOperador, ResultadoReporte } from '../api/operador-api.modelos';
+import { EnvioOperador, IsoUtc, ResultadoReporte, ResultadoTermino } from '../api/operador-api.modelos';
 
 /**
  * Estado de un reporte EN EL TELÉFONO:
  *  - pendiente: guardado en el teléfono, falta enviarlo (sin señal o el servidor no respondió).
- *  - enviado: el servidor lo recibió (estatus aplicado, incidencia registrada, o recibido sin efecto).
+ *  - enviado: el servidor lo recibió (estatus aplicado, incidencia registrada, recibido sin efecto, o incidencia
+ *    terminada, también si ya estaba terminada).
  *  - por-confirmar: espera a la oficina (hito, o intermedio que saltaría un hito).
  *  - confirmado: la oficina capturó ese hito.
  *  - descartado: la oficina descartó el reporte (con su motivo en `mensaje`).
@@ -17,12 +18,13 @@ export interface ReporteLocal {
   id: string;
   /** Dueño del reporte: en un teléfono compartido solo se ven y se envían los del operador con sesión. */
   operadorId: string;
-  reporte: ReporteOperador;
+  /** Reporte de estatus o de incidencia, o término de incidencia ("Ya continué"). */
+  reporte: EnvioOperador;
   /** Texto para mostrar sin necesidad de tener el viaje a la mano ("Viaje 2 · Apodaca → Saltillo"). */
   resumen: string;
   estado: EstadoReporteLocal;
   /** Último resultado que dio el servidor (null mientras no se envía o si fue rechazado). */
-  resultado: ResultadoReporte | null;
+  resultado: ResultadoReporte | ResultadoTermino | null;
   /** Último `mensaje` del servidor (acuse o estado): se muestra tal cual. */
   mensaje: string | null;
   creadoEn: IsoUtc;

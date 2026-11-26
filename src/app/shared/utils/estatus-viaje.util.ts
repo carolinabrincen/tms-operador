@@ -8,7 +8,7 @@
  *    (el del servidor o lo que el operador ya reportó y cuenta como hecho).
  *  - Un viaje Cancelado se muestra, pero no ofrece reportes.
  */
-import { ESTATUS_CARGADO, EstatusViaje, MotivoTramoVacio, ReporteOperador, ResultadoReporte, Salida, Viaje, ViajeVacio } from '../../core/api/operador-api.modelos';
+import { ESTATUS_CARGADO, EnvioOperador, EstatusViaje, MotivoTramoVacio, ResultadoReporte, ResultadoTermino, Salida, Viaje, ViajeVacio } from '../../core/api/operador-api.modelos';
 import { cuentaComoHecho } from './cola-reportes.util';
 
 /** Nombre del estatus para pantalla. */
@@ -169,9 +169,9 @@ export function textoBoton(e: EstatusViaje): string {
 
 /** Lo mínimo de un reporte local para calcular la guía (sirve con ReporteLocal). */
 export interface ReporteParaGuia {
-  reporte: ReporteOperador;
+  reporte: EnvioOperador;
   estado: string;
-  resultado: ResultadoReporte | null;
+  resultado: ResultadoReporte | ResultadoTermino | null;
 }
 
 export interface Guia {
@@ -188,7 +188,7 @@ export function guia(v: Viaje, reportes: readonly ReporteParaGuia[]): Guia {
   let mejor: Guia = { estatus: v.estatus, porReporte: false, estadoReporte: null };
   let rangoMejor = rango(v.tipo, v.estatus);
   for (const r of reportes) {
-    if (r.reporte.viajeId !== v.id || r.reporte.tipo !== 'estatus' || !cuentaComoHecho(r)) continue;
+    if (r.reporte.tipo !== 'estatus' || r.reporte.viajeId !== v.id || !cuentaComoHecho(r)) continue;
     const k = rango(v.tipo, r.reporte.estatus);
     if (k > rangoMejor) {
       rangoMejor = k;

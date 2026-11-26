@@ -111,6 +111,17 @@ export interface ViajeVacio extends ViajeBase {
 
 export type Viaje = ViajeCargado | ViajeVacio;
 
+/**
+ * Incidencia de la salida que sigue sin terminar (contrato M1, sección 2, migración 48): de sus viajes o sin viaje,
+ * también las que registró la oficina. `id` es el que se manda para terminarla (sección 7).
+ */
+export interface IncidenciaAbierta {
+  id: string;
+  tipo: TipoIncidencia;
+  ocurrioEn: IsoUtc;
+  nota: string | null;
+}
+
 /** La salida de la unidad: uno o varios viajes, en orden. (En oficina, el despacho es el inicio del viaje.) */
 export interface Salida {
   id: string;
@@ -118,6 +129,8 @@ export interface Salida {
   unidad: Unidad;
   viajes: Viaje[];
   notas: string | null;
+  /** De la más antigua a la más reciente; [] si no hay. Una copia guardada por una versión anterior puede no traerla. */
+  incidenciasAbiertas: IncidenciaAbierta[];
 }
 
 /** Lo que el operador tiene asignado ahora. Solo lo suyo. */
@@ -162,6 +175,40 @@ export interface ReporteIncidencia extends ReporteBase {
 }
 
 export type ReporteOperador = ReporteEstatus | ReporteIncidencia;
+
+/**
+ * "Ya continué": el operador termina una incidencia abierta (contrato M1, sección 7). Va por la misma cola sin conexión
+ * que los reportes, con su propio id (idempotente). `tipo` es solo de la app (no se manda).
+ */
+export interface TerminoIncidencia {
+  tipo: 'termino';
+  /** Lo genera el teléfono (distinto del de los reportes). Reenviar el mismo id no cambia nada. */
+  id: string;
+  /** El `id` de una de `incidenciasAbiertas`. */
+  incidenciaId: string;
+  /** Hora en que terminó (teléfono, UTC). No antes de la incidencia ni más de 10 minutos en el futuro. */
+  terminadaEn: IsoUtc;
+  ubicacion: PuntoGps | null;
+  /** Hasta 500 caracteres. */
+  nota: string | null;
+}
+
+/** Lo que viaja en la cola del teléfono: reportes de estatus e incidencias, y términos de incidencia. */
+export type EnvioOperador = ReporteOperador | TerminoIncidencia;
+
+/** terminada: este id la terminó. ya-terminada: ya estaba terminada (por usted, por un estatus o por la oficina). */
+export type ResultadoTermino = 'terminada' | 'ya-terminada';
+
+export interface AcuseTerminoIncidencia {
+  id: string;
+  incidenciaId: string;
+  recibidoEn: IsoUtc;
+  /** Con ya-terminada, la hora con que quedó terminada (no la que mandó la app). */
+  terminadaEn: IsoUtc;
+  resultado: ResultadoTermino;
+  /** null con terminada; con ya-terminada explica quién la terminó (de usted). */
+  mensaje: string | null;
+}
 
 /**
  * Qué hizo el servidor con un reporte (contrato M1, tabla 3.1):
