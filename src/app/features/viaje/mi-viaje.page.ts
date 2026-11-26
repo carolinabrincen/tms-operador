@@ -18,8 +18,8 @@ import { viajeActivo, viajesEnOrden } from '../../shared/utils/estatus-viaje.uti
 
 /**
  * Mi viaje (referencia aprobada, mi-viaje.html): barra con señal y "Tráfico"; el paso actual resaltado; origen y destino
- * con el renglón de la hoja de ruta; incidencias abiertas; y abajo, al alcance del pulgar, el botón principal y la fila
- * Incidencia · Foto · Otro paso. Lo demás (datos, fotos, línea de tiempo, otros viajes) está en el detalle del viaje.
+ * con el renglón de la hoja de ruta; incidencias abiertas; y abajo, FIJOS sobre el menú (al alcance del pulgar y
+ * siempre a la vista), el botón principal y la fila Incidencia · Foto · Otro paso. Lo demás (datos, fotos, línea de tiempo, otros viajes) está en el detalle del viaje.
  */
 @Component({
   selector: 'app-mi-viaje',
@@ -35,20 +35,12 @@ import { viajeActivo, viajesEnOrden } from '../../shared/utils/estatus-viaje.uti
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './mi-viaje.page.html',
   styles: `
-    /* Ocupa la pantalla: las acciones quedan abajo, justo arriba del menú. */
     :host {
-      display: flex;
-      flex-direction: column;
-      min-height: 100dvh;
+      display: block;
     }
-    :host-context(.con-ejemplo) {
-      min-height: calc(100dvh - var(--alto-franja-ejemplo));
-    }
+    /* Deja lugar a las acciones fijas y al menú: lo último de arriba se puede desplazar hasta verse completo. */
     .pagina-viaje {
-      display: flex;
-      flex: 1;
-      flex-direction: column;
-      padding-bottom: calc(var(--alto-menu) + 17px + var(--espacio-3) + var(--seguro-abajo));
+      padding-bottom: calc(var(--alto-menu-total) + var(--alto-acciones-fijas) + var(--espacio-3) + var(--seguro-abajo));
     }
     app-paso-actual {
       margin-top: 0;
@@ -81,10 +73,6 @@ import { viajeActivo, viajesEnOrden } from '../../shared/utils/estatus-viaje.uti
       stroke-width: 2.2;
       stroke-linecap: round;
       stroke-linejoin: round;
-    }
-    .empuje {
-      flex: 1;
-      min-height: var(--espacio-4);
     }
     .alerta-texto {
       margin: 0 0 var(--espacio-3);

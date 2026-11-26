@@ -95,6 +95,8 @@
   --alto-boton-medio: 54px;
   --alto-boton-fila: 64px;
   --alto-menu: 54px;
+  --alto-menu-total: calc(var(--alto-menu) + 17px); /* el menú con su relleno y borde */
+  --alto-acciones-fijas: 178px; /* botón principal (72) + fila (64) + rellenos, fijos sobre el menú en Mi viaje */
   --alto-franja-ejemplo: 32px;
   --sombra-flotante: 0 8px 24px rgba(16, 24, 40, 0.16);
   --seguro-abajo: env(safe-area-inset-bottom, 0px);

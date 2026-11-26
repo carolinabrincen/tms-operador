@@ -7,6 +7,23 @@
   margin: 0;
 }
 
+/*
+ * Mi viaje: la acción principal nunca queda fuera de la vista. Va fija sobre el menú inferior; lo de arriba se desplaza
+ * por debajo (la pantalla deja espacio con --alto-acciones-fijas).
+ */
+:host(.fija) .panel {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--alto-menu-total) + var(--seguro-abajo));
+  z-index: 45;
+  max-width: var(--ancho-max);
+  margin: 0 auto;
+  padding: 10px var(--margen-lado);
+  background: var(--c-fondo-pagina);
+  box-shadow: 0 -8px 12px -10px rgba(16, 24, 40, 0.35);
+}
+
 /* Botón principal: línea de ayuda (14 px) arriba y el paso en palabras del operador (24 px). */
 .paso-siguiente .textos {
   display: flex;

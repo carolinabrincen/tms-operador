@@ -139,6 +139,9 @@ service worker, la ubicación y `crypto.randomUUID` no funcionan en `http://` sa
 
 - La referencia está en `docs/diseno-app-operador/mi-viaje.html` y `hoja-ruta.html` (carpeta de documentos). Sus tokens
   (colores, radios, medidas, letra Manrope con respaldo `system-ui`) están **solo** en `src/tema.scss`.
+- La letra **Manrope va dentro de la app**: `src/fuentes/manrope/` (woff2 de 400, 500, 600 y 700, subconjunto latino, de
+  `@fontsource/manrope` 5.1.0) con su licencia SIL OFL 1.1 (`OFL.txt`). Se declara con `@font-face` en `styles.scss`;
+  el build la copia a `media/` y el service worker la descarga junto con la app. No se pide nada a Google Fonts.
 - Criterios de aceptación (operador promedio de 42 años, en ruta; heurísticas de Nielsen): ningún texto menor de 13 px
   (solo etiquetas del menú y de la línea de avance), datos de 16-17 px, secundarios de 14 px, todo en rem; texto
   secundario nunca más claro que #4B5563 y contraste ≥ 4.5:1 (prueba en `core/config/tema-colores.spec.ts`); botón
@@ -147,9 +150,11 @@ service worker, la ubicación y `crypto.randomUUID` no funcionan en `http://` sa
   "Sin señal · 2 por enviar") y **Tráfico** (llama al teléfono de tráfico de la hoja guardada; si no hay, a la oficina;
   si no hay ninguno, no aparece). Bloque oscuro del paso actual ("Usted está aquí · paso 4 de 10", estatus en 40 px con
   su nombre formal, "desde …" y la línea por hitos con el marcador amarillo en la posición real). Origen y destino
-  (tocarlos abre el detalle del viaje) con el renglón de la hoja de ruta. Abajo, el **botón principal** con el paso en
-  palabras del operador ("Ya cargué") y su línea de ayuda ("Toque cuando termine la carga"), y la fila **Incidencia ·
-  Foto · Otro paso**.
+  (tocarlos abre el detalle del viaje) con el renglón de la hoja de ruta. Abajo, **fijos sobre el menú** (nunca quedan
+  fuera de la vista; lo de arriba se desplaza por debajo), el **botón principal** con el paso en palabras del operador
+  ("Ya cargué") y su línea de ayuda ("Toque cuando termine la carga"), y la fila **Incidencia · Foto · Otro paso**.
+- El estatus del bloque oscuro va en un renglón: si no cabe a 40 px baja por pasos (36, 32) hasta 28 px, medido con la
+  letra real; solo si ni así cabe usa dos renglones (`shared/utils/tamano-estatus.util.ts`).
 - **Deshacer**: al tocar el botón principal, el reporte se guarda y espera 8 s (`LAPSO_DESHACER_MS`) antes de enviarse;
   mientras, "Guardado: «Ya cargué», 11:32 a. m." con **Deshacer**, que lo borra sin enviar nada. La ubicación se agrega
   si llega en ese lapso. Si se cierra la app durante el lapso, se envía al volver. Mientras el navegador vaya a pedir el

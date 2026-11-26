@@ -68,6 +68,14 @@ describe('MiViajePage (referencia aprobada): paso actual resaltado y botón prin
     expect(texto('.paso-siguiente .ayuda')).toBe('Toque al salir');
     expect(texto('.paso-siguiente .accion')).toBe('Ya salí');
     expect([...el.querySelectorAll('.fila button')].map((b) => b.textContent!.trim())).toEqual(['Incidencia', 'Foto', 'Otro paso']);
+    // La acción principal va fija sobre el menú (nunca queda fuera de la vista); la pantalla deja lugar para ella.
+    expect(el.querySelector('app-panel-avance')!.classList).toContain('fija');
+    expect(el.querySelector('.fija .panel .paso-siguiente')).not.toBeNull();
+    expect(el.querySelector('.fija .panel .fila')).not.toBeNull();
+    // Sin medir la pantalla (pruebas), el estatus corto va a 40 px en un renglón.
+    const estatus = el.querySelector<HTMLElement>('.estatus')!;
+    expect(estatus.style.fontSize).toBe('2.5rem');
+    expect(estatus.classList).not.toContain('dos-renglones');
   });
 
   it('lo que el operador ya reportó mueve el marcador y el estatus de arriba (con su aclaración si no se ha enviado)', async () => {
@@ -190,6 +198,8 @@ describe('Detalle de un viaje cargado', () => {
     expect(el.querySelector('app-encabezado .subtitulo')!.textContent).toBe('VIA-2026-00771');
     expect(el.querySelector('app-encabezado a.volver')!.getAttribute('href')).toBe('/viaje');
     expect(el.querySelector('.aqui')!.textContent).toBe('Usted está aquí · paso 1 de 10');
+    // En el detalle las acciones van en su lugar (no fijas: la pantalla es larga y se desplaza).
+    expect(el.querySelector('app-panel-avance')!.classList).not.toContain('fija');
     expect([...el.querySelectorAll('.etiquetas span')].map((s) => s.textContent)).toEqual(['Asignado', 'Cargado', 'Descargado', 'Cerrado']);
     const trayecto = el.querySelector('app-trayecto')!;
     expect(trayecto.textContent).toContain('Apodaca, N.L.');

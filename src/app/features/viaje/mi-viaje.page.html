@@ -35,9 +35,8 @@
       <app-incidencias-abiertas [salida]="salida()" />
       <app-sugerencia-acuse [viajes]="viajes()" />
 
-      <div class="empuje"></div>
-
-      <app-panel-avance [viaje]="v" />
+      <!-- Fija sobre el menú: el botón principal (o "Deshacer") y Incidencia · Foto · Otro paso. -->
+      <app-panel-avance [viaje]="v" [fija]="true" />
     } @else {
       <section class="tarjeta tarjeta-destacada sin-viaje" role="status">
         <h2>No tiene un viaje activo</h2>

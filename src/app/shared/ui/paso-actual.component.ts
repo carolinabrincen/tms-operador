@@ -1,14 +1,18 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, afterNextRender, computed, inject, input, signal, viewChild } from '@angular/core';
+import { DOCUMENT } from '@angular/common';
 import { Viaje } from '../../core/api/operador-api.modelos';
 import { ColaReportesService } from '../../core/reportes/cola-reportes.service';
 import { desdeEstatus, guia, lineaHitos, marcaDeGuia, posicionPaso, textoEstatus } from '../utils/estatus-viaje.util';
 import { RELOJ } from '../../core/plataforma';
 import { textoDesde } from '../utils/incidencias-abiertas.util';
+import { MedirTexto, tamanoEstatus } from '../utils/tamano-estatus.util';
 
 /**
  * Bloque oscuro del paso actual (referencia aprobada): "Usted está aquí · paso N de M", el estatus en 40 px con su
  * nombre formal, "desde 11:10 a. m." y la línea de avance por hitos con el marcador amarillo en la posición real.
  * El estatus es el efectivo: incluye lo que el operador ya reportó y el servidor aún no refleja (con su aclaración).
+ * Si el nombre no cabe en un renglón a 40 px, baja por pasos hasta 28 px (medido con la letra real); solo si ni así
+ * cabe, usa dos renglones.
  */
 @Component({
   selector: 'app-paso-actual',
@@ -21,8 +25,8 @@ import { textoDesde } from '../utils/incidencias-abiertas.util';
         }
         <span class="folio">{{ viaje().folio }}</span>
       </div>
-      <div class="estatus-fila">
-        <p class="estatus">{{ estatus() }}</p>
+      <div class="estatus-fila" #fila>
+        <p class="estatus" [style.font-size.rem]="tamano().rem" [class.dos-renglones]="tamano().dosRenglones">{{ estatus() }}</p>
         @if (desde() || marca()) {
           <span class="desde">
             {{ desde() }}
@@ -104,12 +108,17 @@ import { textoDesde } from '../utils/incidencias-abiertas.util';
       column-gap: 10px;
       margin-top: -6px;
     }
+    /* 40 px en un renglón; si no cabe, baja por pasos hasta 28 px; solo entonces, dos renglones. */
     .estatus {
       margin: 0;
       font-size: var(--texto-estatus);
       font-weight: 700;
       line-height: 1.1;
       letter-spacing: -0.02em;
+      white-space: nowrap;
+    }
+    .estatus.dos-renglones {
+      white-space: normal;
     }
     .desde {
       color: var(--c-paso-suave);
@@ -189,6 +198,44 @@ export class PasoActualComponent {
     return iso ? textoDesde(iso, this.reloj()) : '';
   });
   protected readonly linea = computed(() => lineaHitos(this.viaje(), this.cola.reportes()));
+  /** Ancho del renglón del estatus, tamaño de 1rem y si ya cargó la letra (para volver a medir). */
+  private readonly anchoFila = signal<number | null>(null);
+  private readonly raizPx = signal(16);
+  private readonly letraLista = signal(0);
+  private medir: MedirTexto | undefined;
+  private readonly fila = viewChild<ElementRef<HTMLElement>>('fila');
+  protected readonly tamano = computed(() => {
+    this.letraLista();
+    return tamanoEstatus(this.estatus(), this.anchoFila(), this.raizPx(), this.medir);
+  });
+
+  constructor() {
+    const documento = inject(DOCUMENT);
+    const destruir = inject(DestroyRef);
+    afterNextRender(() => {
+      const ventana = documento.defaultView;
+      const fila = this.fila()?.nativeElement;
+      // Sin medición de pantalla (pruebas o navegador muy viejo): se estima por la longitud del texto.
+      if (!ventana || !fila || typeof ventana.ResizeObserver === 'undefined') return;
+      this.raizPx.set(parseFloat(ventana.getComputedStyle(documento.documentElement).fontSize) || 16);
+      const contexto = documento.createElement('canvas').getContext('2d');
+      if (contexto) {
+        this.medir = (texto, px) => {
+          contexto.font = `700 ${px}px Manrope, system-ui, sans-serif`;
+          return contexto.measureText(texto).width - 0.02 * px * texto.length;
+        };
+      }
+      const observador = new ventana.ResizeObserver(() => {
+        this.anchoFila.set(fila.clientWidth);
+        this.raizPx.set(parseFloat(ventana.getComputedStyle(documento.documentElement).fontSize) || 16);
+      });
+      observador.observe(fila);
+      destruir.onDestroy(() => observador.disconnect());
+      // Cuando termina de cargar Manrope, se vuelve a medir con la letra real.
+      void documento.fonts?.ready.then(() => this.letraLista.update((n) => n + 1));
+    });
+  }
+
   protected readonly textosHitos = computed(() =>
     (this.linea()?.etiquetas ?? []).map((e) => `${e.texto}${e.pasado ? ' (hecho)' : ''}`).join(', '),
   );

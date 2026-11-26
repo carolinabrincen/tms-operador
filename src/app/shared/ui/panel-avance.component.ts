@@ -43,12 +43,15 @@ type Borrador =
 @Component({
   selector: 'app-panel-avance',
   imports: [HojaFotoComponent],
+  host: { '[class.fija]': 'fija()' },
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './panel-avance.component.html',
   styleUrl: './panel-avance.component.scss',
 })
 export class PanelAvanceComponent {
   readonly viaje = input.required<Viaje>();
+  /** Mi viaje: el botón principal (o "Deshacer") y la fila de tres, fijos sobre el menú inferior. */
+  readonly fija = input(false);
 
   private readonly cola = inject(ColaReportesService);
   private readonly ubicacion = inject(UbicacionService);
